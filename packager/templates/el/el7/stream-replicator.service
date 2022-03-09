@@ -1,0 +1,13 @@
+[Unit]
+Description=The Choria NATS JetStream Stream Replicator
+After=network.target
+
+[Service]
+StandardOutput=syslog
+StandardError=syslog
+User=nobody
+Group=nobody
+ExecStart={{cpkg_bindir}}/{{cpkg_name}} replicate --config={{cpkg_etcdir}}/sr.yaml
+
+[Install]
+WantedBy=multi-user.target

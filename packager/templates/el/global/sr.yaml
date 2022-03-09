@@ -1,0 +1,16 @@
+---
+# refer to https://github.com/choria-io/stream-replicator for
+# full details about the structure and contents of the config file
+
+name: STREAM_REPLICATOR
+state_store: /var/lib/{{cpkg_name}}
+logfile: /var/log/{{cpkg_name}}.log
+loglevel: info
+monitor_port: 9100
+
+streams:
+  - stream: TEST
+    target_stream: TEST_COPY
+    target_subject_prefix: COPY
+    source_url: nats://localhost:4222
+    target_url: nats://localhost:4222
