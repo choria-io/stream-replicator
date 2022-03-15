@@ -1,2 +1,6 @@
 stream-replicator
+stream-replicator-*.*.*-linux-*
+*.rpm
 .idea
+vendor
+dist
