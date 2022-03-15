@@ -355,7 +355,6 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 			}
 
 			if meta != nil {
-				s.log.Infof("Handled messages %d", meta.StreamSequence())
 				s.source.mu.Lock()
 				s.source.resumeSeq = meta.StreamSequence()
 				s.source.mu.Unlock()
