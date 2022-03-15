@@ -18,7 +18,15 @@ allowing a central aggregator to have a more granular time window awareness than
 
 Multiple Streams can be replicated and order is preserved.
 
-## Relation to Version 1
+ * [Wiki](https://github.com/choria-io/stream-replicator/wiki)
+ * [Discussions](https://github.com/choria-io/stream-replicator/discussions)
+ * [Slack](https://slack.puppet.com/) in channel `#choria`
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/choria-io/stream-replicator)](https://goreportcard.com/report/github.com/choria-io/stream-replicator)
+[![CodeQL](https://github.com/choria-io/stream-replicator/workflows/CodeQL/badge.svg)](https://github.com/choria-io/stream-replicator/actions/workflows/codeql.yaml)
+[![Unit Tests](https://github.com/choria-io/stream-replicator/actions/workflows/test.yaml/badge.svg)](https://github.com/choria-io/stream-replicator/actions/workflows/test.yaml)
+
+## Relation to previous Version
 
 Previously a Stream Replicator projected existed here that support NATS Streaming Server.  This project has now been archived
 and completely rewritten around JetStream.
@@ -27,10 +35,13 @@ The archive is the [choria-legacy/stream-replicator](https://github.com/choria-l
 
 ## Status
 
-This is a work in progress, it is feature complete and has extensive tests but documentation and more will come.
+This is a work in progress, it is feature complete and has extensive tests but documentation and more will come. For a typical
+Stream full of Choria Registration data produced by Chef Ohai, subject to network latency, this replicator can easily copy
+4000 messages / sec unsampled and more when sampling is enabled.
 
 Immediate term feature goals are:
 
  * Complete documentation
  * Monitoring dashboards
  * HA Clustering
+ * Sampling on Headers and Subject tokens

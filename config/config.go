@@ -150,6 +150,12 @@ func Load(file string) (*Config, error) {
 		}
 		names[s.Name] = struct{}{}
 
+		if s.Stream == "" {
+			return nil, fmt.Errorf("stream not specified")
+		}
+		if s.TargetStream == "" {
+			s.TargetStream = s.Stream
+		}
 		if config.TLS == nil {
 			config.TLS = &TLS{}
 		}
