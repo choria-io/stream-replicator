@@ -35,8 +35,8 @@ func Run() {
 	c := &cmd{}
 
 	help := fmt.Sprintf("Choria Stream Replicator version %s", version)
-	if sha != "" {
-		help = fmt.Sprintf("Choria Stream Replicator version %s (%s)", version, sha)
+	if len(sha) > 8 {
+		help = fmt.Sprintf("Choria Stream Replicator version %s (%s)", version, []byte(sha)[0:8])
 	}
 
 	app := kingpin.New("stream-replicator", help)
