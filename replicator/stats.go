@@ -34,9 +34,14 @@ var (
 		Help: "How many messages from the end of the stream the current processing point is",
 	}, []string{"stream", "replicator"})
 
-	skippedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+	skippedMessageCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "skipped_messages"),
 		Help: "How many messages were skipped due to limiter configuration",
+	}, []string{"stream", "replicator"})
+
+	skippedMessageSize = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "skipped_bytes"),
+		Help: "The size of messages that were skipped due to limited configuration",
 	}, []string{"stream", "replicator"})
 
 	metaParsingFailedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -61,7 +66,8 @@ func init() {
 	prometheus.MustRegister(handlerErrorCount)
 	prometheus.MustRegister(processTime)
 	prometheus.MustRegister(lagCount)
-	prometheus.MustRegister(skippedCount)
+	prometheus.MustRegister(skippedMessageCount)
+	prometheus.MustRegister(skippedMessageSize)
 	prometheus.MustRegister(metaParsingFailedCount)
 	prometheus.MustRegister(ackFailedCount)
 	prometheus.MustRegister(consumerRepairCount)
