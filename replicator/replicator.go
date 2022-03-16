@@ -168,9 +168,9 @@ func (s *Stream) limitedProcess(msg *nats.Msg, cb func(msg *nats.Msg, process bo
 }
 
 func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
-	receivedMessageCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Inc()
-	receivedMessageSize.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
-	obs := prometheus.NewTimer(processTime.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName))
+	receivedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+	receivedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
+	obs := prometheus.NewTimer(processTime.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName))
 	defer obs.ObserveDuration()
 
 	if msg.Header == nil {
@@ -179,12 +179,12 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 
 	meta, err := jsm.ParseJSMsgMetadata(msg)
 	if err == nil {
-		lagCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Set(float64(meta.Pending()))
+		lagCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Set(float64(meta.Pending()))
 
 		msg.Header.Add(srcHeader, fmt.Sprintf("%s %d %s", s.cfg.Stream, meta.StreamSequence(), s.cfg.Name))
 	} else {
 		s.log.Warnf("Could not parse message metadata from %v: %v", msg.Reply, err)
-		metaParsingFailedCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Inc()
+		metaParsingFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
 		msg.Header.Add(srcHeader, fmt.Sprintf("%s -1 %s", s.cfg.Stream, s.cfg.Name))
 	}
 
@@ -197,7 +197,8 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 
 		if !process {
 			atomic.AddInt64(&s.skipped, 1)
-			skippedCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Inc()
+			skippedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+			skippedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
 			return nil
 		}
 
@@ -236,7 +237,7 @@ func (s *Stream) nakMsg(msg *nats.Msg, meta *jsm.MsgInfo) (time.Duration, error)
 
 	err := msg.RespondMsg(r)
 	if err != nil {
-		ackFailedCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Inc()
+		ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
 		return next, err
 	}
 
@@ -340,7 +341,7 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 
 				polls.Reset(next)
 
-				handlerErrorCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Inc()
+				handlerErrorCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
 
 				continue
 			}
@@ -349,7 +350,7 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 			res.Subject = msg.Reply
 			err = msg.RespondMsg(res)
 			if err != nil {
-				ackFailedCount.WithLabelValues(s.cfg.Name, s.sr.ReplicatorName).Inc()
+				ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
 				s.log.Errorf("ACK failed: %v", err)
 				continue
 			}
