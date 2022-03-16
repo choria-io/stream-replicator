@@ -29,13 +29,13 @@ Multiple Streams can be replicated and order is preserved.
 
 ## Status
 
-This is a work in progress, it is core-feature complete and has extensive tests, documentation is up to date in our wiki.
-For a typical Stream full of Choria Registration data produced by Chef Ohai, subject to network latency, this replicator 
-can easily copy 4000 messages / sec unsampled and more when sampling is enabled.
+This is a work in progress, it is core-feature complete and has extensive tests, documentation is up to date in our
+[Wiki](https://github.com/choria-io/stream-replicator/wiki). For a typical Stream full of Choria Registration data
+produced by Chef Ohai, subject to network latency, this replicator can easily copy 4000 messages / sec unsampled
+and more when sampling is enabled.
 
 Immediate term feature goals are:
 
- * Monitoring dashboards
  * HA Clustering
  * Sampling on Headers and Subject tokens
 
