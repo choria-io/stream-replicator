@@ -114,6 +114,84 @@ func (t *TLS) PrivateKey() string {
 	return t.Key
 }
 
+func (c *Config) validate() (err error) {
+	if c.ReplicatorName == "" {
+		return fmt.Errorf("name is required")
+	}
+
+	if c.StateDirectory != "" {
+		err = os.MkdirAll(c.StateDirectory, 0700)
+		if err != nil {
+			return fmt.Errorf("could not create state directory: %v", err)
+		}
+	}
+
+	names := map[string]map[string]struct{}{}
+	for _, s := range c.Streams {
+		if s.Name == "" {
+			s.Name = c.ReplicatorName
+		}
+
+		_, has := names[s.Stream]
+		if !has {
+			names[s.Stream] = map[string]struct{}{}
+		}
+		_, has = names[s.Stream][s.Name]
+		if has {
+			return fmt.Errorf("duplicate stream configuration name %s for stream %s", s.Name, s.Stream)
+		}
+		names[s.Stream][s.Name] = struct{}{}
+
+		if s.Stream == "" {
+			return fmt.Errorf("stream not specified")
+		}
+		if s.TargetStream == "" {
+			s.TargetStream = s.Stream
+		}
+		if c.TLS == nil {
+			c.TLS = &TLS{}
+		}
+		if s.TLS == nil {
+			s.TLS = c.TLS
+		}
+		if s.SourceTLS == nil {
+			s.SourceTLS = s.TLS
+		}
+		if s.TargetTLS == nil {
+			s.TargetTLS = s.TLS
+		}
+
+		if c.StateDirectory != "" {
+			s.StateFile = filepath.Join(c.StateDirectory, fmt.Sprintf("%s.json", s.Name))
+		}
+
+		if s.StartDeltaString != "" {
+			s.StartDelta, err = util.ParseDurationString(s.StartDeltaString)
+			if err != nil {
+				return fmt.Errorf("invalid start_delta: %v", err)
+			}
+		}
+
+		if s.InspectDurationString != "" {
+			s.InspectDuration, err = util.ParseDurationString(s.InspectDurationString)
+			if err != nil {
+				return fmt.Errorf("invalid inspect_duration: %v", err)
+			}
+
+			s.WarnDuration = s.InspectDuration / 2
+		}
+
+		if s.WarnDurationString != "" {
+			s.WarnDuration, err = util.ParseDurationString(s.WarnDurationString)
+			if err != nil {
+				return fmt.Errorf("invalid warn_duration: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func Load(file string) (*Config, error) {
 	c, err := os.ReadFile(file)
 	if err != nil {
@@ -125,77 +203,16 @@ func Load(file string) (*Config, error) {
 		return nil, err
 	}
 
-	config := Config{}
-	err = json.Unmarshal(j, &config)
+	config := &Config{}
+	err = json.Unmarshal(j, config)
 	if err != nil {
 		return nil, err
 	}
 
-	if config.ReplicatorName == "" {
-		return nil, fmt.Errorf("name is required")
+	err = config.validate()
+	if err != nil {
+		return nil, err
 	}
 
-	if config.StateDirectory != "" {
-		err = os.MkdirAll(config.StateDirectory, 0700)
-		if err != nil {
-			return nil, fmt.Errorf("could not create state directory: %v", err)
-		}
-	}
-
-	names := map[string]struct{}{}
-	for _, s := range config.Streams {
-		_, has := names[s.Name]
-		if has {
-			return nil, fmt.Errorf("duplicate stream configuration name %s", s.Name)
-		}
-		names[s.Name] = struct{}{}
-
-		if s.Stream == "" {
-			return nil, fmt.Errorf("stream not specified")
-		}
-		if s.TargetStream == "" {
-			s.TargetStream = s.Stream
-		}
-		if config.TLS == nil {
-			config.TLS = &TLS{}
-		}
-		if s.TLS == nil {
-			s.TLS = config.TLS
-		}
-		if s.SourceTLS == nil {
-			s.SourceTLS = s.TLS
-		}
-		if s.TargetTLS == nil {
-			s.TargetTLS = s.TLS
-		}
-
-		if config.StateDirectory != "" {
-			s.StateFile = filepath.Join(config.StateDirectory, fmt.Sprintf("%s.json", s.Name))
-		}
-
-		if s.StartDeltaString != "" {
-			s.StartDelta, err = util.ParseDurationString(s.StartDeltaString)
-			if err != nil {
-				return nil, fmt.Errorf("invalid start_delta: %v", err)
-			}
-		}
-
-		if s.InspectDurationString != "" {
-			s.InspectDuration, err = util.ParseDurationString(s.InspectDurationString)
-			if err != nil {
-				return nil, fmt.Errorf("invalid inspect_duration: %v", err)
-			}
-
-			s.WarnDuration = s.InspectDuration / 2
-		}
-
-		if s.WarnDurationString != "" {
-			s.WarnDuration, err = util.ParseDurationString(s.WarnDurationString)
-			if err != nil {
-				return nil, fmt.Errorf("invalid warn_duration: %v", err)
-			}
-		}
-	}
-
-	return &config, nil
+	return config, nil
 }
