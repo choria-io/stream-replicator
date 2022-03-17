@@ -136,5 +136,23 @@ var _ = Describe("Config", func() {
 			cfg.Streams[1].Name = "OTHER"
 			Expect(cfg.validate()).ToNot(HaveOccurred())
 		})
+
+		It("Should support only 1 inspection mode", func() {
+			cfg.Streams = []*Stream{
+				{Stream: "TEST", InspectJSONField: "x"},
+			}
+			Expect(cfg.validate()).ToNot(HaveOccurred())
+
+			cfg.Streams = []*Stream{
+				{Stream: "TEST", InspectSubjectToken: 1, InspectJSONField: "x"},
+			}
+			Expect(cfg.validate()).To(MatchError("only one inspection mode can be set per stream"))
+
+			cfg.Streams = []*Stream{
+				{Stream: "TEST", InspectHeaderValue: "H", InspectJSONField: "x"},
+			}
+			Expect(cfg.validate()).To(MatchError("only one inspection mode can be set per stream"))
+
+		})
 	})
 })

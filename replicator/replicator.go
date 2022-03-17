@@ -117,7 +117,7 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 	var err error
 
 	if s.cfg.InspectJSONField != _EMPTY_ && s.cfg.InspectDuration > 0 {
-		s.limiter, err = memory.New(ctx, wg, s.cfg.InspectJSONField, s.cfg.InspectDuration, s.cfg.WarnDuration, s.cfg.PayloadSizeTrigger, s.cname, s.cfg.StateFile, s.cfg.Stream, s.sr.ReplicatorName, s.log)
+		s.limiter, err = memory.New(ctx, wg, s.cfg.InspectJSONField, s.cfg.InspectHeaderValue, s.cfg.InspectSubjectToken, s.cfg.InspectDuration, s.cfg.WarnDuration, s.cfg.PayloadSizeTrigger, s.cname, s.cfg.StateFile, s.cfg.Stream, s.sr.ReplicatorName, s.log)
 		if err != nil {
 			return err
 		}

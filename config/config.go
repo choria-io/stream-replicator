@@ -61,6 +61,10 @@ type Stream struct {
 	TargetTLS *TLS `json:"target_tls"`
 	// InspectJSONField will inspect a specific field in JSON payloads and limit sends by this field
 	InspectJSONField string `json:"inspect_field"`
+	// InspectHeaderValue inspects the value of a header and does limiting based on that
+	InspectHeaderValue string `json:"inspect_header"`
+	// InspectSubjectToken inspects a certain token and limits based on that, -1 inspects the entire subject, 0 disables
+	InspectSubjectToken int `json:"inspect_subject_token"`
 	// InspectDurationString will limit the sending of messages to 1 per duration based on the value of InspectJSONField
 	InspectDurationString string `json:"inspect_duration"`
 	// WarnDurationString is how long to allow an item not to be seen before advising about it
@@ -128,6 +132,20 @@ func (c *Config) validate() (err error) {
 
 	names := map[string]map[string]struct{}{}
 	for _, s := range c.Streams {
+		inspections := 0
+		if s.InspectHeaderValue != "" {
+			inspections++
+		}
+		if s.InspectJSONField != "" {
+			inspections++
+		}
+		if s.InspectSubjectToken != 0 {
+			inspections++
+		}
+		if inspections > 1 {
+			return fmt.Errorf("only one inspection mode can be set per stream")
+		}
+
 		if s.Name == "" {
 			s.Name = c.ReplicatorName
 		}
