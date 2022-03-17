@@ -37,7 +37,6 @@ and more when sampling is enabled.
 Immediate term feature goals are:
 
  * HA Clustering
- * Sampling on Headers and Subject tokens
 
 ## Relation to previous version
 
