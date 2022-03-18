@@ -59,6 +59,8 @@ type Stream struct {
 	SourceTLS *TLS `json:"source_tls"`
 	// TargetTLS overrides TLS for the target only
 	TargetTLS *TLS `json:"target_tls"`
+	// MaxAgeString will skip messages older than this
+	MaxAgeString string `json:"max_age"`
 	// InspectJSONField will inspect a specific field in JSON payloads and limit sends by this field
 	InspectJSONField string `json:"inspect_field"`
 	// InspectHeaderValue inspects the value of a header and does limiting based on that
@@ -81,6 +83,8 @@ type Stream struct {
 	InspectDuration time.Duration `json:"-"`
 	// WarnDuration is a parsed WarnDurationString
 	WarnDuration time.Duration `json:"-"`
+	// MaxAgeDuration will discard messages older than this
+	MaxAgeDuration time.Duration `json:"-"`
 	// StateFile where state will be written
 	StateFile string `json:"-"`
 }
@@ -203,6 +207,12 @@ func (c *Config) validate() (err error) {
 			s.WarnDuration, err = util.ParseDurationString(s.WarnDurationString)
 			if err != nil {
 				return fmt.Errorf("invalid warn_duration: %v", err)
+			}
+		}
+		if s.MaxAgeString != "" {
+			s.MaxAgeDuration, err = util.ParseDurationString(s.MaxAgeString)
+			if err != nil {
+				return fmt.Errorf("invalid max_age: %v", err)
 			}
 		}
 	}

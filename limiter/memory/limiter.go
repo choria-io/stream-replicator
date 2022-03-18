@@ -33,8 +33,6 @@ type limiter struct {
 
 var _EMPTY_ = ""
 
-// TODO support inspecting a header and maybe a subject-prefix
-
 func New(ctx context.Context, wg *sync.WaitGroup, inspectJSONField string, inspectHeader string, inspectToken int, inspectDuration time.Duration, warnDuration time.Duration, sizeTrigger float64, name string, stateFile string, stream string, replicator string, log *logrus.Entry) (*limiter, error) {
 	if inspectDuration == 0 {
 		return nil, fmt.Errorf("inspect duration not set, memory limiter can not start")

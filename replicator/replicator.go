@@ -57,9 +57,10 @@ type Target struct {
 }
 
 const (
-	pollFrequency = 10 * time.Second
-	srcHeader     = "Choria-SR-Source"
-	_EMPTY_       = ""
+	pollFrequency    = 10 * time.Second
+	srcHeader        = "Choria-SR-Source"
+	srcHeaderPattern = "%s %d %s %d"
+	_EMPTY_          = ""
 )
 
 func (t *Target) Close() error {
@@ -179,13 +180,19 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 
 	meta, err := jsm.ParseJSMsgMetadata(msg)
 	if err == nil {
-		lagCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Set(float64(meta.Pending()))
+		lagMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Set(float64(meta.Pending()))
+		streamSequence.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Set(float64(meta.StreamSequence()))
 
-		msg.Header.Add(srcHeader, fmt.Sprintf("%s %d %s", s.cfg.Stream, meta.StreamSequence(), s.cfg.Name))
+		if s.cfg.MaxAgeDuration > 0 && time.Since(meta.TimeStamp()) > s.cfg.MaxAgeDuration {
+			ageSkippedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+			return meta, nil
+		}
+
+		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, meta.StreamSequence(), s.cfg.Name, meta.TimeStamp().UnixMilli()))
 	} else {
 		s.log.Warnf("Could not parse message metadata from %v: %v", msg.Reply, err)
 		metaParsingFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
-		msg.Header.Add(srcHeader, fmt.Sprintf("%s -1 %s", s.cfg.Stream, s.cfg.Name))
+		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, -1, s.cfg.Name, -1))
 	}
 
 	return meta, s.limitedProcess(msg, func(msg *nats.Msg, process bool) error {
