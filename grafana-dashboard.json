@@ -21,7 +21,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "8.4.2"
+      "version": "8.3.1"
     },
     {
       "type": "datasource",
@@ -65,7 +65,7 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1647437452042,
+  "iteration": 1647610614066,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -184,7 +184,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "increase(choria_stream_replicator_replicator_total_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n-\nincrease(choria_stream_replicator_replicator_skipped_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])",
+          "expr": "increase(choria_stream_replicator_replicator_copied_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])",
           "hide": false,
           "interval": "",
           "legendFormat": "Copied Messages",
@@ -306,73 +306,6 @@
       "type": "timeseries"
     },
     {
-      "description": "Indicates the effectiveness of the sampling configuration, a value of 80 means 80/100 messages received from the source was not copied to the targets",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 19.9995
-              },
-              {
-                "color": "green",
-                "value": 50
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 14,
-        "y": 1
-      },
-      "id": 8,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "8.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": false,
-          "expr": "rate(choria_stream_replicator_replicator_skipped_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n/\nrate(choria_stream_replicator_replicator_total_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n*\n100",
-          "interval": "",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Sampling %",
-      "type": "gauge"
-    },
-    {
       "description": "Messages copied to the target, if limits are applied this would be a fraction of total",
       "fieldConfig": {
         "defaults": {
@@ -396,7 +329,7 @@
       "gridPos": {
         "h": 8,
         "w": 3,
-        "x": 18,
+        "x": 14,
         "y": 1
       },
       "id": 5,
@@ -414,7 +347,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.2",
+      "pluginVersion": "8.3.1",
       "targets": [
         {
           "datasource": {
@@ -422,13 +355,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum(increase(choria_stream_replicator_replicator_total_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n-\nincrease(choria_stream_replicator_replicator_skipped_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m]))",
+          "expr": "sum(rate(choria_stream_replicator_replicator_copied_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Replicated / 5 min",
+      "title": "Replicated / Sec",
       "type": "stat"
     },
     {
@@ -455,7 +388,7 @@
       "gridPos": {
         "h": 8,
         "w": 3,
-        "x": 21,
+        "x": 17,
         "y": 1
       },
       "id": 6,
@@ -473,7 +406,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.2",
+      "pluginVersion": "8.3.1",
       "targets": [
         {
           "datasource": {
@@ -481,14 +414,82 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum(rate(choria_stream_replicator_replicator_total_bytes{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n-\nrate(choria_stream_replicator_replicator_skipped_bytes{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m]))",
+          "expr": "sum(rate(choria_stream_replicator_replicator_copied_bytes{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Replicated Bytes / sec",
+      "title": "Replicated Bps",
       "type": "stat"
+    },
+    {
+      "description": "Indicates the effectiveness of the sampling configuration, a value of 80 means 80/100 messages received from the source was not copied to the targets",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 19.9995
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 8,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "8.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "exemplar": false,
+          "expr": "rate(choria_stream_replicator_replicator_skipped_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n/\nrate(choria_stream_replicator_replicator_total_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m])\n*\n100",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Sampling %",
+      "type": "gauge"
     },
     {
       "description": "Advisories issued by the limiter",
@@ -526,6 +527,7 @@
             }
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -722,64 +724,6 @@
       "type": "timeseries"
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "yellow",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 14,
-        "y": 9
-      },
-      "id": 12,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "8.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "exemplar": false,
-          "expr": "choria_stream_replicator_tracker_total_items{replicator=~\"${replicator}\",stream=~\"${stream}\"}",
-          "interval": "",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Tracked Items",
-      "type": "stat"
-    },
-    {
       "description": "Total number of messages received from the Source",
       "fieldConfig": {
         "defaults": {
@@ -803,7 +747,7 @@
       "gridPos": {
         "h": 8,
         "w": 3,
-        "x": 18,
+        "x": 14,
         "y": 9
       },
       "id": 2,
@@ -821,7 +765,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.2",
+      "pluginVersion": "8.3.1",
       "targets": [
         {
           "datasource": {
@@ -829,13 +773,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum(increase(choria_stream_replicator_replicator_total_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m]))",
+          "expr": "sum(rate(choria_stream_replicator_replicator_total_messages{replicator=~\"${replicator}\",stream=~\"${stream}\"}[5m]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Processed / 5 min",
+      "title": "Processed / Sec",
       "type": "stat"
     },
     {
@@ -862,7 +806,7 @@
       "gridPos": {
         "h": 8,
         "w": 3,
-        "x": 21,
+        "x": 17,
         "y": 9
       },
       "id": 3,
@@ -880,7 +824,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.2",
+      "pluginVersion": "8.3.1",
       "targets": [
         {
           "datasource": {
@@ -894,7 +838,66 @@
           "refId": "A"
         }
       ],
-      "title": "Processed Bytes / sec",
+      "title": "Processed Bps",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 9
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "exemplar": false,
+          "expr": "choria_stream_replicator_tracker_total_items{replicator=~\"${replicator}\",stream=~\"${stream}\"}",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Tracked Items",
       "type": "stat"
     },
     {
@@ -1255,14 +1258,15 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 35,
+  "refresh": "10s",
+  "schemaVersion": 33,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {},
+        "datasource": "${DS_PROMETHEUS}",
         "definition": "label_values(choria_stream_replicator_replicator_total_messages, replicator)",
         "description": "",
         "hide": 0,
@@ -1279,11 +1283,11 @@
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query",
-        "datasource": "${DS_PROMETHEUS}"
+        "type": "query"
       },
       {
         "current": {},
+        "datasource": "${DS_PROMETHEUS}",
         "definition": "label_values(choria_stream_replicator_replicator_total_messages, stream)",
         "hide": 0,
         "includeAll": true,
@@ -1298,19 +1302,18 @@
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
-        "type": "query",
-        "datasource": "${DS_PROMETHEUS}"
+        "type": "query"
       }
     ]
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Stream Replicator",
   "uid": "V1M-qFP7k",
-  "version": 15,
+  "version": 3,
   "weekStart": ""
 }
