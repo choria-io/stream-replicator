@@ -230,6 +230,9 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 			s.log.Debugf("Copied message seq %d, %d message(s) behind", meta.StreamSequence(), meta.Pending())
 		}
 
+		copiedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+		copiedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
+
 		return nil
 	})
 }

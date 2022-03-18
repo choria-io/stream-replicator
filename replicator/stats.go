@@ -44,6 +44,16 @@ var (
 		Help: "How many messages were discarded for being too old",
 	}, []string{"stream", "replicator"})
 
+	copiedMessageCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "copied_messages"),
+		Help: "How many messages were copied",
+	}, []string{"stream", "replicator"})
+
+	copiedMessageSize = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "copied_bytes"),
+		Help: "The size of messages that were copied",
+	}, []string{"stream", "replicator"})
+
 	skippedMessageCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "skipped_messages"),
 		Help: "How many messages were skipped due to limiter configuration",
@@ -76,6 +86,8 @@ func init() {
 	prometheus.MustRegister(handlerErrorCount)
 	prometheus.MustRegister(processTime)
 	prometheus.MustRegister(lagMessageCount)
+	prometheus.MustRegister(copiedMessageCount)
+	prometheus.MustRegister(copiedMessageSize)
 	prometheus.MustRegister(skippedMessageCount)
 	prometheus.MustRegister(skippedMessageSize)
 	prometheus.MustRegister(metaParsingFailedCount)
