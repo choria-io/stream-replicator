@@ -62,27 +62,6 @@ var _ = Describe("Replicator", func() {
 		return sr, stream
 	}
 
-	waitForStreamMessages := func(s *jsm.Stream, n uint64, timeout time.Duration) {
-		to, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		ticker := time.NewTicker(50 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				nfo, err := s.State()
-				Expect(err).ToNot(HaveOccurred())
-				if nfo.Msgs >= n {
-					return
-				}
-			case <-to.Done():
-				Fail(fmt.Sprintf("timeout waiting for %d messages on stream %s", n, s.Name()))
-			}
-		}
-	}
-
 	publishToSource := func(nc *nats.Conn, subject string, insert int) {
 		for i := 1; i <= insert; i++ {
 			_, err := nc.Request("TEST", []byte(fmt.Sprintf(`{"msg":%d,"sender":"host%d"}`, i, i%10)), time.Second)
@@ -101,22 +80,25 @@ var _ = Describe("Replicator", func() {
 		return ts, tcs
 	}
 
-	waitForResumeSeq := func(s *Stream, seq uint64) {
-		ticker := time.NewTicker(10 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				s.mu.Lock()
-				r := s.source.resumeSeq
-				s.mu.Unlock()
-				if r >= seq {
-					return
-				}
-			case <-ctx.Done():
-				Fail(fmt.Sprintf("timeout waiting for %d resume sequence", seq))
+	// for use with Eventually()
+	streamMesssage := func(s *jsm.Stream) func() (uint64, error) {
+		return func() (uint64, error) {
+			nfo, err := s.State()
+			if err != nil {
+				return 0, err
 			}
+			return nfo.Msgs, nil
+		}
+	}
+
+	// for use with Eventually()
+	resumeSeq := func(s *Stream) func() uint64 {
+		return func() uint64 {
+			s.mu.Lock()
+			r := s.source.resumeSeq
+			s.mu.Unlock()
+
+			return r
 		}
 	}
 
@@ -151,7 +133,7 @@ var _ = Describe("Replicator", func() {
 				}()
 				defer cancel()
 
-				waitForStreamMessages(tcs, 1000, 10*time.Second)
+				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 1000))
 			})
 		})
 
@@ -174,7 +156,38 @@ var _ = Describe("Replicator", func() {
 				}()
 				defer cancel()
 
-				waitForStreamMessages(tcs, 1000, 10*time.Second)
+				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 1000))
+			})
+		})
+
+		It("Should support skipping old messages", func() {
+			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+				ts, tcs := prepareStreams(nc, mgr, 1000)
+
+				sr, scfg := config(nc.ConnectedUrl())
+				scfg.MaxAgeDuration = time.Second
+
+				stream, err := NewStream(scfg, sr, log)
+				Expect(err).ToNot(HaveOccurred())
+
+				time.Sleep(time.Second)
+
+				publishToSource(nc, "TEST", 10)
+
+				go func() {
+					defer GinkgoRecover()
+					wg.Add(1)
+					Expect(stream.Run(ctx, &wg)).ToNot(HaveOccurred())
+				}()
+				defer cancel()
+
+				nfo, err := ts.State()
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(resumeSeq(stream)).Should(BeNumerically(">=", nfo.LastSeq))
+
+				nfo, err = tcs.State()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(nfo.Msgs).To(Equal(uint64(10)))
 			})
 		})
 
@@ -198,11 +211,11 @@ var _ = Describe("Replicator", func() {
 				defer cancel()
 
 				// 10 unique senders in the stream
-				waitForStreamMessages(tcs, 10, 10*time.Second)
+				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 10))
 
 				nfo, err := ts.State()
 				Expect(err).ToNot(HaveOccurred())
-				waitForResumeSeq(stream, nfo.LastSeq)
+				Eventually(resumeSeq(stream)).Should(BeNumerically(">=", nfo.LastSeq))
 			})
 		})
 
@@ -223,16 +236,14 @@ var _ = Describe("Replicator", func() {
 				}()
 				defer cancel()
 
-				waitForStreamMessages(tcs, 1000, 10*time.Second)
+				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 1000))
 
 				consumer, err := ts.LoadConsumer(stream.cname)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(consumer.Delete()).ToNot(HaveOccurred())
 
 				publishToSource(nc, "TEST", 1000)
-				log.Infof("Starting to wait")
-				waitForStreamMessages(tcs, 2000, 10*time.Second)
-				log.Infof("Finished waiting")
+				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 2000))
 			})
 		})
 	})

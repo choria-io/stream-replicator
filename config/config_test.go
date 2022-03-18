@@ -121,6 +121,12 @@ var _ = Describe("Config", func() {
 			cfg.Streams[0].WarnDurationString = "1h"
 			Expect(cfg.validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].WarnDuration).To(Equal(time.Hour))
+
+			cfg.Streams[0].MaxAgeString = "wrong"
+			Expect(cfg.validate()).To(MatchError("invalid max_age: invalid time unit g"))
+			cfg.Streams[0].MaxAgeString = "1h"
+			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Streams[0].MaxAgeDuration).To(Equal(time.Hour))
 		})
 
 		It("Should fail for duplicate names on the same stream", func() {

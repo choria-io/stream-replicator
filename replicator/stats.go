@@ -29,9 +29,19 @@ var (
 		Help: "How long it took to process messages",
 	}, []string{"stream", "replicator"})
 
-	lagCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	lagMessageCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "stream_lag_messages"),
 		Help: "How many messages from the end of the stream the current processing point is",
+	}, []string{"stream", "replicator"})
+
+	streamSequence = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "stream_sequence"),
+		Help: "The stream sequence of the last message received from the consumer",
+	}, []string{"stream", "replicator"})
+
+	ageSkippedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "too_old_messages"),
+		Help: "How many messages were discarded for being too old",
 	}, []string{"stream", "replicator"})
 
 	skippedMessageCount = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -65,10 +75,12 @@ func init() {
 	prometheus.MustRegister(receivedMessageSize)
 	prometheus.MustRegister(handlerErrorCount)
 	prometheus.MustRegister(processTime)
-	prometheus.MustRegister(lagCount)
+	prometheus.MustRegister(lagMessageCount)
 	prometheus.MustRegister(skippedMessageCount)
 	prometheus.MustRegister(skippedMessageSize)
 	prometheus.MustRegister(metaParsingFailedCount)
 	prometheus.MustRegister(ackFailedCount)
 	prometheus.MustRegister(consumerRepairCount)
+	prometheus.MustRegister(streamSequence)
+	prometheus.MustRegister(ageSkippedCount)
 }

@@ -5,9 +5,9 @@ go 1.17
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.6.0
-	github.com/nats-io/jsm.go v0.0.30
-	github.com/nats-io/nats-server/v2 v2.7.5-0.20220309212130-5c0d1999ff72
-	github.com/nats-io/nats.go v1.13.1-0.20220315162358-77460b8f0fe0
+	github.com/nats-io/jsm.go v0.0.31-0.20220318094353-016d9b02a83f
+	github.com/nats-io/nats-server/v2 v2.7.5-0.20220318022501-29ff67e2ac34
+	github.com/nats-io/nats.go v1.13.1-0.20220317185802-4fef66c57d2b
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
 	github.com/prometheus/client_golang v1.12.1
@@ -39,7 +39,7 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd // indirect
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
-	golang.org/x/sys v0.0.0-20220315194320-039c03cc5b86 // indirect
+	golang.org/x/sys v0.0.0-20220318055525-2edf467146b5 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
