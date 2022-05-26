@@ -108,7 +108,8 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 		log: log.WithFields(logrus.Fields{
 			"source":   stream.Stream,
 			"target":   stream.TargetStream,
-			"consumer": name}),
+			"consumer": name,
+		}),
 	}, nil
 }
 
@@ -149,7 +150,7 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 	}
 
 	<-ctx.Done()
-	s.log.Infof("exiting on context interrupt")
+	s.log.Infof("Exiting on context interrupt")
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -215,6 +216,11 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 			msg.Subject = target
 		}
 
+		if s.cfg.TargetRemoveString != _EMPTY_ {
+			msg.Subject = strings.Replace(msg.Subject, s.cfg.TargetRemoveString, "", -1)
+			msg.Subject = strings.Replace(msg.Subject, "..", "", -1)
+		}
+
 		resp, err := s.dest.nc.RequestMsg(msg, 2*time.Second)
 		if err != nil {
 			return err
@@ -255,7 +261,7 @@ func (s *Stream) nakMsg(msg *nats.Msg, meta *jsm.MsgInfo) (time.Duration, error)
 }
 
 func (s *Stream) copier(ctx context.Context) (err error) {
-	msgs := make(chan *nats.Msg, 11)
+	msgs := make(chan *nats.Msg, 10)
 
 	s.source.mu.Lock()
 	nextSubj := s.source.consumer.NextSubject()
@@ -490,11 +496,26 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 	scfg := s.source.cfg
 	s.source.mu.Unlock()
 
-	if s.cfg.TargetPrefix != _EMPTY_ {
+	if s.cfg.TargetPrefix != _EMPTY_ || s.cfg.TargetRemoveString != _EMPTY_ {
 		var subjects []string
+
 		for _, sub := range scfg.Subjects {
-			subjects = append(subjects, fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, sub))
+			var target string
+
+			if s.cfg.TargetPrefix != _EMPTY_ {
+				target = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, sub)
+			} else {
+				target = sub
+			}
+
+			if s.cfg.TargetRemoveString != _EMPTY_ {
+				target = strings.Replace(target, s.cfg.TargetRemoveString, "", -1)
+				target = strings.Replace(target, "..", "", -1)
+			}
+
+			subjects = append(subjects, target)
 		}
+
 		scfg.Subjects = subjects
 	}
 

@@ -33,14 +33,16 @@ type Config struct {
 }
 
 type Stream struct {
+	// Name is a friendly name that will be used in the consumer name and show up in every message header
+	Name string `json:"name"`
 	// Stream is the source stream name
 	Stream string `json:"stream"`
 	// TargetStream is the name of the stream on the remote, if this is unset the Stream value will be used
 	TargetStream string `json:"target_stream"`
 	// TargetPrefix is a prefix to put in-front of subjects from the Stream. The final subject is <prefix>.<msg subject>
 	TargetPrefix string `json:"target_subject_prefix"`
-	// Name is a friendly name that will be used in the consumer name and show up in every message header
-	Name string `json:"name"`
+	// TargetRemoveString removes a part from the target subject after applying the prefix
+	TargetRemoveString string `json:"target_subject_remove"`
 	// SourceURL is the NATS server to source messages from in nats://user:pass@server form
 	SourceURL string `json:"source_url"`
 	// TargetURL is the NATS server to send messages to in nats://user:pass@server form
@@ -167,18 +169,23 @@ func (c *Config) validate() (err error) {
 		if s.Stream == "" {
 			return fmt.Errorf("stream not specified")
 		}
+
 		if s.TargetStream == "" {
 			s.TargetStream = s.Stream
 		}
+
 		if c.TLS == nil {
 			c.TLS = &TLS{}
 		}
+
 		if s.TLS == nil {
 			s.TLS = c.TLS
 		}
+
 		if s.SourceTLS == nil {
 			s.SourceTLS = s.TLS
 		}
+
 		if s.TargetTLS == nil {
 			s.TargetTLS = s.TLS
 		}
@@ -209,6 +216,7 @@ func (c *Config) validate() (err error) {
 				return fmt.Errorf("invalid warn_duration: %v", err)
 			}
 		}
+
 		if s.MaxAgeString != "" {
 			s.MaxAgeDuration, err = util.ParseDurationString(s.MaxAgeString)
 			if err != nil {
