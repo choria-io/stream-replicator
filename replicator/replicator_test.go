@@ -47,11 +47,12 @@ var _ = Describe("Replicator", func() {
 
 	config := func(srv string) (*config.Config, *config.Stream) {
 		stream := &config.Stream{
-			Stream:       "TEST",
-			TargetStream: "TEST_COPY",
-			TargetPrefix: "copy",
-			SourceURL:    srv,
-			TargetURL:    srv,
+			Stream:             "TEST",
+			TargetStream:       "TEST_COPY",
+			TargetPrefix:       "copy.x.redundant.",
+			TargetRemoveString: "redundant",
+			SourceURL:          srv,
+			TargetURL:          srv,
 		}
 
 		sr := &config.Config{
@@ -72,7 +73,7 @@ var _ = Describe("Replicator", func() {
 	prepareStreams := func(nc *nats.Conn, mgr *jsm.Manager, insert int) (*jsm.Stream, *jsm.Stream) {
 		ts, err := mgr.NewStream("TEST")
 		Expect(err).ToNot(HaveOccurred())
-		tcs, err := mgr.NewStream("TEST_COPY", jsm.Subjects("copy.TEST"))
+		tcs, err := mgr.NewStream("TEST_COPY", jsm.Subjects("copy.>"))
 		Expect(err).ToNot(HaveOccurred())
 
 		publishToSource(nc, "TEST", insert)
@@ -134,6 +135,11 @@ var _ = Describe("Replicator", func() {
 				defer cancel()
 
 				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 1000))
+
+				// check prefix and remove string works
+				msg, err := tcs.ReadMessage(1)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(msg.Subject).To(Equal("copy.x.TEST"))
 			})
 		})
 
