@@ -195,7 +195,7 @@ func (c *Config) validate() (err error) {
 		}
 
 		if c.StateDirectory != "" {
-			s.StateFile = filepath.Join(c.StateDirectory, fmt.Sprintf("%s.json", s.Name))
+			s.StateFile = filepath.Join(c.StateDirectory, fmt.Sprintf("%s_%s.json", s.Stream, s.Name))
 		}
 
 		if s.StartDeltaString != "" {

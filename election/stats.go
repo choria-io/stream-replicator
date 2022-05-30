@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	prometheusNamespace = "choria_asyncjobs"
+	prometheusNamespace = "choria_stream_replicator"
 
 	campaignsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(prometheusNamespace, "election", "campaigns"),

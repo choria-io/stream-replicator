@@ -93,11 +93,11 @@ var _ = Describe("Config", func() {
 			cfg.StateDirectory = os.TempDir()
 			cfg.Streams = []*Stream{{Stream: "GINKGO"}}
 			Expect(cfg.validate()).ToNot(HaveOccurred())
-			Expect(cfg.Streams[0].StateFile).To(Equal(filepath.Join(os.TempDir(), "GINKGO.json")))
+			Expect(cfg.Streams[0].StateFile).To(Equal(filepath.Join(os.TempDir(), "GINKGO_GINKGO.json")))
 
 			cfg.Streams[0].Name = "OTHER"
 			Expect(cfg.validate()).ToNot(HaveOccurred())
-			Expect(cfg.Streams[0].StateFile).To(Equal(filepath.Join(os.TempDir(), "OTHER.json")))
+			Expect(cfg.Streams[0].StateFile).To(Equal(filepath.Join(os.TempDir(), "GINKGO_OTHER.json")))
 		})
 
 		It("Should parse inspect durations", func() {
