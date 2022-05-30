@@ -208,7 +208,7 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		s.advisor.Pause()
 	}
 
-	e, err := election.NewElection(s.cfg.LeaderElectionName, s.cname, kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
+	e, err := election.NewElection(s.cfg.LeaderElectionName, fmt.Sprintf("%s_%s", s.cfg.Name, s.cname), kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,6 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 			msg.Subject = strings.Replace(msg.Subject, "..", ".", -1)
 		}
 
-		s.log.Infof("subject: %s", msg.Subject)
 		resp, err := s.dest.nc.RequestMsg(msg, 2*time.Second)
 		if err != nil {
 			return err
