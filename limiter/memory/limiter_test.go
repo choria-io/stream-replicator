@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/choria-io/stream-replicator/config"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,7 @@ var _ = Describe("Limiter", func() {
 		cancel context.CancelFunc
 		wg     = sync.WaitGroup{}
 		log    *logrus.Entry
+		cfg    *config.Stream
 	)
 
 	BeforeEach(func() {
@@ -35,6 +37,11 @@ var _ = Describe("Limiter", func() {
 		logger := logrus.New()
 		logger.SetOutput(GinkgoWriter)
 		log = logrus.NewEntry(logger)
+		cfg = &config.Stream{
+			InspectDuration:    time.Hour,
+			WarnDuration:       30 * time.Minute,
+			PayloadSizeTrigger: 1024,
+		}
 	})
 
 	AfterEach(func() {
@@ -44,7 +51,8 @@ var _ = Describe("Limiter", func() {
 
 	Describe("ProcessAndRecord", func() {
 		It("Should handle missing fields", func() {
-			limiter, err := New(ctx, &wg, "sender", "", 0, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+			cfg.InspectJSONField = "sender"
+			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 			Expect(err).ToNot(HaveOccurred())
 
 			msg := nats.NewMsg("test")
@@ -60,7 +68,8 @@ var _ = Describe("Limiter", func() {
 		})
 
 		It("Should handle present json fields", func() {
-			limiter, err := New(ctx, &wg, "sender", "", 0, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+			cfg.InspectJSONField = "sender"
+			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 			Expect(err).ToNot(HaveOccurred())
 
 			msg := nats.NewMsg("test")
@@ -87,7 +96,8 @@ var _ = Describe("Limiter", func() {
 	})
 
 	It("Should handle absent token values", func() {
-		limiter, err := New(ctx, &wg, "", "", 10, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+		cfg.InspectSubjectToken = 10
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test")
@@ -104,7 +114,8 @@ var _ = Describe("Limiter", func() {
 	})
 
 	It("Should handle full subject inspections", func() {
-		limiter, err := New(ctx, &wg, "", "", -1, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+		cfg.InspectSubjectToken = -1
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test.1")
@@ -134,7 +145,8 @@ var _ = Describe("Limiter", func() {
 	})
 
 	It("Should handle present token values", func() {
-		limiter, err := New(ctx, &wg, "", "", 2, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+		cfg.InspectSubjectToken = 2
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test.1")
@@ -164,7 +176,8 @@ var _ = Describe("Limiter", func() {
 	})
 
 	It("Should handle absent header values", func() {
-		limiter, err := New(ctx, &wg, "", "sender", 0, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+		cfg.InspectHeaderValue = "sender"
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test")
@@ -180,7 +193,8 @@ var _ = Describe("Limiter", func() {
 	})
 
 	It("Should handle present header values", func() {
-		limiter, err := New(ctx, &wg, "", "sender", 0, time.Hour, 30*time.Minute, 1024, "GINKGO", "", "STREAM", "GINKGO", log)
+		cfg.InspectHeaderValue = "sender"
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test")

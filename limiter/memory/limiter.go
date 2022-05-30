@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/choria-io/stream-replicator/config"
 	"github.com/choria-io/stream-replicator/idtrack"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
@@ -33,8 +34,8 @@ type limiter struct {
 
 var _EMPTY_ = ""
 
-func New(ctx context.Context, wg *sync.WaitGroup, inspectJSONField string, inspectHeader string, inspectToken int, inspectDuration time.Duration, warnDuration time.Duration, sizeTrigger float64, name string, stateFile string, stream string, replicator string, log *logrus.Entry) (*limiter, error) {
-	if inspectDuration == 0 {
+func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name string, replicator string, log *logrus.Entry) (*limiter, error) {
+	if cfg.InspectDuration == 0 {
 		return nil, fmt.Errorf("inspect duration not set, memory limiter can not start")
 	}
 	if name == _EMPTY_ {
@@ -46,36 +47,36 @@ func New(ctx context.Context, wg *sync.WaitGroup, inspectJSONField string, inspe
 
 	l := &limiter{
 		name:       name,
-		duration:   inspectDuration,
-		jsonField:  inspectJSONField,
-		header:     inspectHeader,
-		token:      inspectToken,
-		stateFile:  stateFile,
-		stream:     stream,
+		duration:   cfg.InspectDuration,
+		jsonField:  cfg.InspectJSONField,
+		header:     cfg.InspectHeaderValue,
+		token:      cfg.InspectSubjectToken,
+		stateFile:  cfg.StateFile,
+		stream:     cfg.Stream,
 		replicator: replicator,
 		log: log.WithFields(logrus.Fields{
 			"limiter":  "memory",
-			"duration": inspectDuration.String(),
+			"duration": cfg.InspectDuration.String(),
 		}),
 		mu: &sync.Mutex{},
 	}
 
 	switch {
-	case inspectJSONField != _EMPTY_:
-		l.log = log.WithField("field", inspectJSONField)
+	case l.jsonField != _EMPTY_:
+		l.log = log.WithField("field", l.jsonField)
 
-	case inspectHeader != _EMPTY_:
-		l.log = log.WithField("header", inspectHeader)
+	case l.header != _EMPTY_:
+		l.log = log.WithField("header", l.header)
 
-	case inspectToken != 0:
-		l.log = log.WithField("token", inspectToken)
+	case l.token != 0:
+		l.log = log.WithField("token", l.token)
 
 	default:
 		return nil, fmt.Errorf("inspect field, header or token not set, memory limiter can not start")
 	}
 
 	var err error
-	l.processed, err = idtrack.New(ctx, wg, inspectDuration, warnDuration, sizeTrigger, stateFile, stream, replicator, log)
+	l.processed, err = idtrack.New(ctx, wg, l.duration, cfg.WarnDuration, cfg.PayloadSizeTrigger, l.stateFile, l.stream, replicator, log)
 	if err != nil {
 		return nil, err
 	}

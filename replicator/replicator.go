@@ -16,6 +16,7 @@ import (
 	"github.com/choria-io/stream-replicator/advisor"
 	"github.com/choria-io/stream-replicator/backoff"
 	"github.com/choria-io/stream-replicator/config"
+	"github.com/choria-io/stream-replicator/election"
 	"github.com/choria-io/stream-replicator/idtrack"
 	"github.com/choria-io/stream-replicator/internal/util"
 	"github.com/choria-io/stream-replicator/limiter/memory"
@@ -42,6 +43,7 @@ type Stream struct {
 	copied     int64
 	skipped    int64
 	hcInterval time.Duration
+	paused     bool
 	mu         *sync.Mutex
 }
 
@@ -105,6 +107,7 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 		cname:      name,
 		mu:         &sync.Mutex{},
 		hcInterval: time.Minute,
+		paused:     stream.LeaderElection,
 		log: log.WithFields(logrus.Fields{
 			"source":   stream.Stream,
 			"target":   stream.TargetStream,
@@ -118,8 +121,14 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 
 	var err error
 
+	err = s.connect(ctx)
+	if err != nil {
+		s.log.Errorf("Could not setup connection: %v", err)
+		return err
+	}
+
 	if s.cfg.InspectJSONField != _EMPTY_ && s.cfg.InspectDuration > 0 {
-		s.limiter, err = memory.New(ctx, wg, s.cfg.InspectJSONField, s.cfg.InspectHeaderValue, s.cfg.InspectSubjectToken, s.cfg.InspectDuration, s.cfg.WarnDuration, s.cfg.PayloadSizeTrigger, s.cname, s.cfg.StateFile, s.cfg.Stream, s.sr.ReplicatorName, s.log)
+		s.limiter, err = memory.New(ctx, wg, s.cfg, s.cname, s.sr.ReplicatorName, s.log)
 		if err != nil {
 			return err
 		}
@@ -137,10 +146,12 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 		}
 	}
 
-	err = s.connect(ctx)
-	if err != nil {
-		s.log.Errorf("Could not setup connection: %v", err)
-		return err
+	if s.cfg.LeaderElection {
+		err = s.setupElection(ctx)
+		if err != nil {
+			s.log.Errorf("Could not set up elections: %v", err)
+			return err
+		}
 	}
 
 	err = s.copier(ctx)
@@ -157,6 +168,45 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 
 	s.source.Close()
 	s.dest.Close()
+
+	return nil
+}
+
+func (s *Stream) setupElection(ctx context.Context) error {
+	if s.sr.ReplicatorName == "" {
+		return fmt.Errorf("leader elections require name set on the stream configuration")
+	}
+
+	js, err := s.source.nc.JetStream()
+	if err != nil {
+		return err
+	}
+
+	kv, err := js.KeyValue("CHORIA_LEADER_ELECTION")
+	if err != nil {
+		return err
+	}
+
+	win := func() {
+		s.mu.Lock()
+		s.log.Infof("Became the leader")
+		s.paused = false
+		s.mu.Unlock()
+	}
+
+	lost := func() {
+		s.mu.Lock()
+		s.log.Infof("Lost the leadership")
+		s.paused = true
+		s.mu.Unlock()
+	}
+
+	e, err := election.NewElection(s.sr.ReplicatorName, s.cname, kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
+	if err != nil {
+		return err
+	}
+
+	go e.Start(ctx)
 
 	return nil
 }
@@ -260,6 +310,12 @@ func (s *Stream) nakMsg(msg *nats.Msg, meta *jsm.MsgInfo) (time.Duration, error)
 	return next, nil
 }
 
+func (s *Stream) isPaused() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.paused
+}
+
 func (s *Stream) copier(ctx context.Context) (err error) {
 	msgs := make(chan *nats.Msg, 10)
 
@@ -300,6 +356,11 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 	for {
 		select {
 		case <-polls.C:
+			if s.isPaused() {
+				s.log.Debugf("Skipping poll while paused")
+				continue
+			}
+
 			if time.Since(polled) < pollFrequency {
 				polls.Reset(pollFrequency)
 				continue
@@ -424,6 +485,10 @@ func (s *Stream) healthCheckSource() (fixed bool, err error) {
 		jsm.AcknowledgeExplicit(),
 		jsm.MaxAckPending(1),
 		jsm.AckWait(30 * time.Second),
+	}
+
+	if s.cfg.FilterSubject != _EMPTY_ {
+		opts = append(opts, jsm.FilterStreamBySubject(s.cfg.FilterSubject))
 	}
 
 	if s.source.resumeSeq > 0 {
