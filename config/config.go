@@ -37,6 +37,8 @@ type Stream struct {
 	Name string `json:"name"`
 	// Stream is the source stream name
 	Stream string `json:"stream"`
+	// FilterSubject creates a consumer that listens to a specific subject only
+	FilterSubject string `json:"filter_subject"`
 	// TargetStream is the name of the stream on the remote, if this is unset the Stream value will be used
 	TargetStream string `json:"target_stream"`
 	// TargetPrefix is a prefix to put in-front of subjects from the Stream. The final subject is <prefix>.<msg subject>
@@ -75,6 +77,8 @@ type Stream struct {
 	WarnDurationString string `json:"warn_duration"`
 	// PayloadSizeTrigger sets a trigger size that, if a message has a size change bigger than this, will cause an immediate replicate to do overriding the usual inspect_duration based limits
 	PayloadSizeTrigger float64 `json:"size_trigger"`
+	// LeaderElection indicates that this replicator is part of a group and will elect a leader to replicate, limiter will share state among the group
+	LeaderElection bool `json:"leader_election"`
 
 	// AdvisoryConf configures advisories for streams with Inspection enabled
 	AdvisoryConf *Advisory `json:"advisory"`

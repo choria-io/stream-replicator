@@ -252,5 +252,38 @@ var _ = Describe("Replicator", func() {
 				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 2000))
 			})
 		})
+
+		It("Should support leader election", func() {
+			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+				js, err := nc.JetStream()
+				Expect(err).ToNot(HaveOccurred())
+				_, err = js.CreateKeyValue(&nats.KeyValueConfig{Bucket: "CHORIA_LEADER_ELECTION", TTL: 2 * time.Second})
+				Expect(err).ToNot(HaveOccurred())
+
+				ts, tcs := prepareStreams(nc, mgr, 1000)
+				sr, scfg := config(nc.ConnectedUrl())
+				scfg.LeaderElection = true
+
+				stream, err := NewStream(scfg, sr, log)
+				stream.hcInterval = 10 * time.Millisecond
+				Expect(err).ToNot(HaveOccurred())
+
+				go func() {
+					defer GinkgoRecover()
+					wg.Add(1)
+					Expect(stream.Run(ctx, &wg)).ToNot(HaveOccurred())
+				}()
+				defer cancel()
+
+				Eventually(streamMesssage(tcs), "1m").Should(BeNumerically(">=", 1000))
+
+				consumer, err := ts.LoadConsumer(stream.cname)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(consumer.Delete()).ToNot(HaveOccurred())
+
+				publishToSource(nc, "TEST", 1000)
+				Eventually(streamMesssage(tcs), "1m").Should(BeNumerically(">=", 2000))
+			})
+		})
 	})
 })
