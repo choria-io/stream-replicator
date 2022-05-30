@@ -66,6 +66,8 @@ type Advisor struct {
 	replicator   string
 	log          *logrus.Entry
 	stream       string
+	paused       bool
+	mu           sync.Mutex
 }
 
 func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Advisory, nc *nats.Conn, tracker Tracker, inspectField string, stream string, replicator string, log *logrus.Entry) (*Advisor, error) {
@@ -102,6 +104,24 @@ func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Advisory, nc *nats
 
 	a.log.Infof("Advisory starting publishing to %s", a.cfg.Subject)
 	return a, nil
+}
+
+func (a *Advisor) Pause() {
+	a.mu.Lock()
+	a.paused = true
+	a.mu.Unlock()
+}
+
+func (a *Advisor) Resume() {
+	a.mu.Lock()
+	a.paused = false
+	a.mu.Unlock()
+}
+
+func (a *Advisor) isPaused() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.paused
 }
 
 func (a *Advisor) publisher(ctx context.Context, wg *sync.WaitGroup) {
@@ -159,9 +179,11 @@ func (a *Advisor) publisher(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case advisory := <-a.out:
-			err := publisher(advisory)
-			if err != nil {
-				a.log.Errorf("Could not publish advisory: %v", err)
+			if !a.isPaused() {
+				err := publisher(advisory)
+				if err != nil {
+					a.log.Errorf("Could not publish advisory: %v", err)
+				}
 			}
 
 		case <-ctx.Done():

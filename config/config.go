@@ -78,7 +78,7 @@ type Stream struct {
 	// PayloadSizeTrigger sets a trigger size that, if a message has a size change bigger than this, will cause an immediate replicate to do overriding the usual inspect_duration based limits
 	PayloadSizeTrigger float64 `json:"size_trigger"`
 	// LeaderElection indicates that this replicator is part of a group and will elect a leader to replicate, limiter will share state among the group
-	LeaderElection bool `json:"leader_election"`
+	LeaderElectionName string `json:"leader_election_name"`
 
 	// AdvisoryConf configures advisories for streams with Inspection enabled
 	AdvisoryConf *Advisory `json:"advisory"`
