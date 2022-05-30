@@ -40,6 +40,7 @@ type Stream struct {
 	source     *Target
 	dest       *Target
 	limiter    Limiter
+	advisor    *advisor.Advisor
 	copied     int64
 	skipped    int64
 	hcInterval time.Duration
@@ -107,7 +108,7 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 		cname:      name,
 		mu:         &sync.Mutex{},
 		hcInterval: time.Minute,
-		paused:     stream.LeaderElection,
+		paused:     stream.LeaderElectionName != _EMPTY_,
 		log: log.WithFields(logrus.Fields{
 			"source":   stream.Stream,
 			"target":   stream.TargetStream,
@@ -139,14 +140,14 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 				return err
 			}
 
-			_, err = advisor.New(ctx, wg, s.cfg.AdvisoryConf, nc, s.limiter.Tracker(), s.cfg.InspectJSONField, s.cfg.Stream, s.sr.ReplicatorName, s.log)
+			s.advisor, err = advisor.New(ctx, wg, s.cfg.AdvisoryConf, nc, s.limiter.Tracker(), s.cfg.InspectJSONField, s.cfg.Stream, s.sr.ReplicatorName, s.log)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	if s.cfg.LeaderElection {
+	if s.cfg.LeaderElectionName != _EMPTY_ {
 		err = s.setupElection(ctx)
 		if err != nil {
 			s.log.Errorf("Could not set up elections: %v", err)
@@ -173,10 +174,6 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 }
 
 func (s *Stream) setupElection(ctx context.Context) error {
-	if s.sr.ReplicatorName == "" {
-		return fmt.Errorf("leader elections require name set on the stream configuration")
-	}
-
 	js, err := s.source.nc.JetStream()
 	if err != nil {
 		return err
@@ -191,6 +188,9 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		s.mu.Lock()
 		s.log.Infof("Became the leader")
 		s.paused = false
+		if s.advisor != nil {
+			s.advisor.Resume()
+		}
 		s.mu.Unlock()
 	}
 
@@ -198,16 +198,24 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		s.mu.Lock()
 		s.log.Infof("Lost the leadership")
 		s.paused = true
+		if s.advisor != nil {
+			s.advisor.Pause()
+		}
 		s.mu.Unlock()
 	}
 
-	e, err := election.NewElection(s.sr.ReplicatorName, s.cname, kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
+	if s.advisor != nil {
+		s.advisor.Pause()
+	}
+
+	e, err := election.NewElection(s.cfg.LeaderElectionName, s.cname, kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
 	if err != nil {
 		return err
 	}
 
 	go e.Start(ctx)
 
+	s.log.Infof("Set up leader election %s using candidate name %s", s.cname, s.cfg.LeaderElectionName)
 	return nil
 }
 
@@ -260,17 +268,17 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 			return nil
 		}
 
-		target := msg.Subject
 		if s.cfg.TargetPrefix != _EMPTY_ {
-			target = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, target)
-			msg.Subject = target
+			msg.Subject = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, msg.Subject)
+			msg.Subject = strings.Replace(msg.Subject, "..", ".", -1)
 		}
 
 		if s.cfg.TargetRemoveString != _EMPTY_ {
 			msg.Subject = strings.Replace(msg.Subject, s.cfg.TargetRemoveString, "", -1)
-			msg.Subject = strings.Replace(msg.Subject, "..", "", -1)
+			msg.Subject = strings.Replace(msg.Subject, "..", ".", -1)
 		}
 
+		s.log.Infof("subject: %s", msg.Subject)
 		resp, err := s.dest.nc.RequestMsg(msg, 2*time.Second)
 		if err != nil {
 			return err
@@ -366,7 +374,12 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 				continue
 			}
 
-			s.log.Infof("Performing poll for messages last poll %v", time.Since(polled))
+			if polled.IsZero() {
+				s.log.Infof("Performing poll for messages last poll: never")
+			} else {
+				s.log.Infof("Performing poll for messages last poll: %s", time.Since(polled))
+			}
+
 			err = nc.PublishMsg(pollMsg)
 			if err != nil {
 				s.log.Errorf("Could not request next messages: %v", err)
@@ -575,7 +588,7 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 
 			if s.cfg.TargetRemoveString != _EMPTY_ {
 				target = strings.Replace(target, s.cfg.TargetRemoveString, "", -1)
-				target = strings.Replace(target, "..", "", -1)
+				target = strings.Replace(target, "..", ".", -1)
 			}
 
 			subjects = append(subjects, target)

@@ -238,6 +238,8 @@ func (e *election) campaign(wg *sync.WaitGroup) error {
 				e.opts.lostCb()
 			}
 
+			e.opts.bucket.Delete(e.opts.key)
+
 			return nil
 		}
 	}

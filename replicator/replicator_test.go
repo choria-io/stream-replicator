@@ -262,7 +262,7 @@ var _ = Describe("Replicator", func() {
 
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 				sr, scfg := config(nc.ConnectedUrl())
-				scfg.LeaderElection = true
+				scfg.LeaderElectionName = "ginkgo.example.net"
 
 				stream, err := NewStream(scfg, sr, log)
 				stream.hcInterval = 10 * time.Millisecond

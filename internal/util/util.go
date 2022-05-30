@@ -67,13 +67,19 @@ func ConnectNats(ctx context.Context, name string, srv string, tls TLSConfig, ol
 		}
 	}
 
-	url, err := url.Parse(srv)
-	if err != nil {
-		return nil, err
+	var urls []string
+	for _, u := range strings.Split(srv, ",") {
+		url, err := url.Parse(strings.TrimSpace(u))
+		if err != nil {
+			return nil, err
+		}
+
+		urls = append(urls, url.Redacted())
 	}
 
 	err = backoff.Default.For(ctx, func(try int) error {
-		log.Infof("Attempting to connect to %s on try %d", url.Redacted(), try)
+		log.Infof("Attempting to connect to %s on try %d", strings.Join(urls, ", "), try)
+
 		nc, err = nats.Connect(srv, opts...)
 		if err != nil {
 			log.Errorf("Initial connection failed: %v", err)
