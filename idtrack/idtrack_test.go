@@ -30,6 +30,7 @@ var _ = Describe("Tracker", func() {
 		wg      = sync.WaitGroup{}
 		log     *logrus.Entry
 		tracker *Tracker
+		td      *os.File
 		err     error
 	)
 
@@ -38,12 +39,17 @@ var _ = Describe("Tracker", func() {
 		logger := logrus.New()
 		logger.SetOutput(GinkgoWriter)
 		log = logrus.NewEntry(logger)
-		tracker, err = New(ctx, &wg, 60*time.Minute, 30*time.Minute, 1024, "", "TEST", "GINKGO", log)
-		Expect(err).ToNot(HaveOccurred())
 
+		td, err = os.CreateTemp("", "")
+		Expect(err).ToNot(HaveOccurred())
+		td.Close()
+
+		tracker, err = New(ctx, &wg, 60*time.Minute, 30*time.Minute, 1024, td.Name(), "TEST", "1", "GINKGO", log)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
+		os.RemoveAll(td.Name())
 		cancel()
 		wg.Wait()
 	})
@@ -127,6 +133,8 @@ var _ = Describe("Tracker", func() {
 
 		It("Should handle zero size as true", func() {
 			tracker.RecordSeen("new", 0)
+			tracker.RecordCopied("new")
+
 			// zero to zero
 			Expect(tracker.ShouldProcess("new", 0)).To(BeFalse())
 			// zero to anything
@@ -135,34 +143,52 @@ var _ = Describe("Tracker", func() {
 
 		It("Should trigger on size increases", func() {
 			tracker.RecordSeen("new", 1024)
+			tracker.RecordCopied("new")
+
 			Expect(tracker.ShouldProcess("new", 1999)).To(BeFalse())
 			Expect(tracker.ShouldProcess("new", 2048)).To(BeTrue())
 		})
 
 		It("Should trigger on size decreases", func() {
 			tracker.RecordSeen("new", 2048)
+			tracker.RecordCopied("new")
+
 			Expect(tracker.ShouldProcess("new", 1999)).To(BeFalse())
 			Expect(tracker.ShouldProcess("new", 1024)).To(BeTrue())
 		})
 
 		It("Should correctly handle the deadline", func() {
 			tracker.RecordSeen("new", 2048)
+			tracker.RecordCopied("new")
+
 			tracker.Items["new"].Seen = time.Now().UTC().Add(-1 * 59 * time.Minute)
 			Expect(tracker.ShouldProcess("new", 2048)).To(BeFalse())
 			tracker.Items["new"].Seen = time.Now().UTC().Add(-1 * time.Hour)
+			Expect(tracker.ShouldProcess("new", 2048)).To(BeTrue())
+		})
+
+		It("Should support last copied sampling", func() {
+			tracker.RecordSeen("new", 2048)
+			tracker.RecordCopied("new")
+
+			tracker.Items["new"].Seen = time.Now().UTC().Add(-1 * 10 * time.Minute)
+			Expect(tracker.ShouldProcess("new", 2048)).To(BeFalse())
+			tracker.Items["new"].Copied = time.Now().UTC().Add(-1 * 61 * time.Minute)
 			Expect(tracker.ShouldProcess("new", 2048)).To(BeTrue())
 		})
 	})
 
 	Describe("lastSeen", func() {
 		It("Should return the correct items", func() {
-			t, sz := tracker.lastSeen("new")
+			t, _, sz := tracker.lastSeen("new")
 			Expect(t.IsZero()).To(BeTrue())
 			Expect(sz).To(Equal(float64(0)))
 
 			tracker.RecordSeen("new", 1024)
-			t, sz = tracker.lastSeen("new")
+			tracker.RecordCopied("new")
+			t, copied, sz := tracker.lastSeen("new")
 			Expect(t).To(BeTemporally("~", time.Now().UTC(), 500*time.Millisecond))
+			Expect(copied).To(BeTemporally("~", time.Now().UTC(), 500*time.Millisecond))
 			Expect(sz).To(Equal(float64(1024)))
 		})
 	})
