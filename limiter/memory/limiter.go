@@ -63,25 +63,25 @@ func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name strin
 
 	switch {
 	case l.jsonField != _EMPTY_:
-		l.log = log.WithField("field", l.jsonField)
+		l.log = l.log.WithField("field", l.jsonField)
 
 	case l.header != _EMPTY_:
-		l.log = log.WithField("header", l.header)
+		l.log = l.log.WithField("header", l.header)
 
 	case l.token != 0:
-		l.log = log.WithField("token", l.token)
+		l.log = l.log.WithField("token", l.token)
 
 	default:
 		return nil, fmt.Errorf("inspect field, header or token not set, memory limiter can not start")
 	}
 
 	var err error
-	l.processed, err = idtrack.New(ctx, wg, l.duration, cfg.WarnDuration, cfg.PayloadSizeTrigger, l.stateFile, l.stream, replicator, log)
+	l.processed, err = idtrack.New(ctx, wg, l.duration, cfg.WarnDuration, cfg.PayloadSizeTrigger, l.stateFile, l.stream, cfg.Name, replicator, log)
 	if err != nil {
 		return nil, err
 	}
 
-	l.log.Debugf("Memory based limiter started")
+	l.log.Infof("Memory based limiter started")
 
 	return l, nil
 
@@ -122,5 +122,14 @@ func (l *limiter) ProcessAndRecord(msg *nats.Msg, f func(msg *nats.Msg, process 
 	shouldProcess := l.processed.ShouldProcess(trackValue, sz)
 	l.processed.RecordSeen(trackValue, sz)
 
-	return f(msg, shouldProcess)
+	err := f(msg, shouldProcess)
+	if err != nil {
+		return err
+	}
+
+	if shouldProcess {
+		l.processed.RecordCopied(trackValue)
+	}
+
+	return nil
 }

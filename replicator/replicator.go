@@ -62,7 +62,7 @@ type Target struct {
 const (
 	pollFrequency    = 10 * time.Second
 	srcHeader        = "Choria-SR-Source"
-	srcHeaderPattern = "%s %d %s %d"
+	srcHeaderPattern = "%s %d %s %s %d"
 	_EMPTY_          = ""
 )
 
@@ -228,9 +228,9 @@ func (s *Stream) limitedProcess(msg *nats.Msg, cb func(msg *nats.Msg, process bo
 }
 
 func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
-	receivedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
-	receivedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
-	obs := prometheus.NewTimer(processTime.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName))
+	receivedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
+	receivedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Add(float64(len(msg.Data)))
+	obs := prometheus.NewTimer(processTime.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name))
 	defer obs.ObserveDuration()
 
 	if msg.Header == nil {
@@ -239,19 +239,19 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 
 	meta, err := jsm.ParseJSMsgMetadata(msg)
 	if err == nil {
-		lagMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Set(float64(meta.Pending()))
-		streamSequence.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Set(float64(meta.StreamSequence()))
+		lagMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(float64(meta.Pending()))
+		streamSequence.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(float64(meta.StreamSequence()))
 
 		if s.cfg.MaxAgeDuration > 0 && time.Since(meta.TimeStamp()) > s.cfg.MaxAgeDuration {
-			ageSkippedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+			ageSkippedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
 			return meta, nil
 		}
 
-		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, meta.StreamSequence(), s.cfg.Name, meta.TimeStamp().UnixMilli()))
+		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, meta.StreamSequence(), s.sr.ReplicatorName, s.cfg.Name, meta.TimeStamp().UnixMilli()))
 	} else {
 		s.log.Warnf("Could not parse message metadata from %v: %v", msg.Reply, err)
-		metaParsingFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
-		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, -1, s.cfg.Name, -1))
+		metaParsingFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
+		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, -1, s.sr.ReplicatorName, s.cfg.Name, -1))
 	}
 
 	return meta, s.limitedProcess(msg, func(msg *nats.Msg, process bool) error {
@@ -263,8 +263,8 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 
 		if !process {
 			atomic.AddInt64(&s.skipped, 1)
-			skippedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
-			skippedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
+			skippedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
+			skippedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Add(float64(len(msg.Data)))
 			return nil
 		}
 
@@ -293,8 +293,8 @@ func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 			s.log.Debugf("Copied message seq %d, %d message(s) behind", meta.StreamSequence(), meta.Pending())
 		}
 
-		copiedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
-		copiedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Add(float64(len(msg.Data)))
+		copiedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
+		copiedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Add(float64(len(msg.Data)))
 
 		return nil
 	})
@@ -310,7 +310,7 @@ func (s *Stream) nakMsg(msg *nats.Msg, meta *jsm.MsgInfo) (time.Duration, error)
 
 	err := msg.RespondMsg(r)
 	if err != nil {
-		ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+		ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
 		return next, err
 	}
 
@@ -398,7 +398,7 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 
 			if fixed {
 				s.log.Warnf("Source consumer %s recreated", s.cname)
-				consumerRepairCount.WithLabelValues(s.source.stream.Name(), s.sr.ReplicatorName).Inc()
+				consumerRepairCount.WithLabelValues(s.source.stream.Name(), s.sr.ReplicatorName, s.cfg.Name).Inc()
 				polled = time.Time{}
 				polls.Reset(time.Microsecond)
 			}
@@ -430,7 +430,7 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 
 				polls.Reset(next)
 
-				handlerErrorCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+				handlerErrorCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
 
 				continue
 			}
@@ -439,7 +439,7 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 			res.Subject = msg.Reply
 			err = msg.RespondMsg(res)
 			if err != nil {
-				ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName).Inc()
+				ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
 				s.log.Errorf("ACK failed: %v", err)
 				continue
 			}

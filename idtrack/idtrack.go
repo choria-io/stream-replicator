@@ -19,7 +19,8 @@ import (
 
 type Item struct {
 	Seen    time.Time `json:"seen"`
-	Advised bool      `json:"advised"`
+	Copied  time.Time `json:"copied"`
+	Advised bool      `json:"advised,omitempty"`
 	Size    float64   `json:"size"`
 }
 
@@ -38,6 +39,7 @@ type Tracker struct {
 
 	stream     string
 	replicator string
+	worker     string
 
 	sync.Mutex
 }
@@ -46,7 +48,7 @@ const (
 	_EMPTY_ = ""
 )
 
-func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn time.Duration, sizeTrigger float64, stateFile string, stream string, replicator string, log *logrus.Entry) (*Tracker, error) {
+func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn time.Duration, sizeTrigger float64, stateFile string, stream string, worker string, replicator string, log *logrus.Entry) (*Tracker, error) {
 	t := &Tracker{
 		Items:       map[string]*Item{},
 		interval:    interval,
@@ -54,6 +56,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn t
 		sizeTrigger: sizeTrigger,
 		stateFile:   stateFile,
 		stream:      stream,
+		worker:      worker,
 		replicator:  replicator,
 		Mutex:       sync.Mutex{},
 	}
@@ -153,6 +156,19 @@ func (t *Tracker) RecordSeen(v string, sz float64) {
 	i.Size = sz
 }
 
+// RecordCopied records the fact the node data was copied, used to manage sampling
+func (t *Tracker) RecordCopied(v string) {
+	t.Lock()
+	defer t.Unlock()
+
+	i, ok := t.Items[v]
+	if !ok {
+		return
+	}
+
+	i.Copied = time.Now()
+}
+
 // RecordAdvised records that we advised about the item
 func (t *Tracker) RecordAdvised(v string) {
 	t.Lock()
@@ -166,24 +182,31 @@ func (t *Tracker) RecordAdvised(v string) {
 	i.Advised = true
 }
 
-func (t *Tracker) lastSeen(v string) (time.Time, float64) {
+func (t *Tracker) lastSeen(v string) (time.Time, time.Time, float64) {
 	t.Lock()
 	defer t.Unlock()
 
 	i, ok := t.Items[v]
 	if !ok {
-		return time.Time{}, 0
+		return time.Time{}, time.Time{}, 0
 	}
 
-	return i.Seen, i.Size
+	return i.Seen, i.Copied, i.Size
 }
 
+// ShouldProcess determines if a message should be processed considering last seen times, size deltas and copied delta
 func (t *Tracker) ShouldProcess(v string, sz float64) bool {
 	if v == _EMPTY_ {
 		return true
 	}
 
-	seen, psz := t.lastSeen(v)
+	deadline := time.Now().Add(-1 * (t.interval - time.Second))
+	seen, copied, psz := t.lastSeen(v)
+
+	if copied.IsZero() || copied.Before(deadline) {
+		return true
+	}
+
 	if seen.IsZero() || (psz == 0 && sz != 0) {
 		return true
 	}
@@ -191,8 +214,6 @@ func (t *Tracker) ShouldProcess(v string, sz float64) bool {
 	if t.sizeTrigger > 0 && math.Abs(psz-sz) >= t.sizeTrigger {
 		return true
 	}
-
-	deadline := time.Now().Add(-1 * (t.interval - time.Second))
 
 	return seen.Before(deadline)
 }
@@ -250,7 +271,7 @@ func (t *Tracker) loadState() error {
 
 	t.scrub()
 
-	t.log.Infof("Read %d bytes of last-processed data from cache file %s with %d active entries", len(d), t.stateFile, len(t.Items))
+	t.log.Infof("Read %d bytes of last-processed data with %d active entries", len(d), len(t.Items))
 
 	return nil
 }
@@ -266,7 +287,7 @@ func (t *Tracker) saveState() error {
 	t.scrub()
 
 	if len(t.Items) == 0 {
-		// doesnt matter if it fails, load will scrub anyway
+		// doesn't matter if it fails, load will scrub anyway
 		os.Remove(t.stateFile)
 		return nil
 	}
@@ -324,6 +345,7 @@ func (t *Tracker) scrub() {
 	}
 
 	for _, v := range deletes {
+		trackedItems.WithLabelValues(t.stream, t.replicator, t.worker).Dec()
 		delete(t.Items, v)
 	}
 
@@ -335,7 +357,7 @@ func (t *Tracker) scrub() {
 		go t.warnCB(warnings)
 	}
 
-	trackedItems.WithLabelValues(t.stream, t.replicator).Set(float64(len(t.Items)))
+	trackedItems.WithLabelValues(t.stream, t.replicator, t.worker).Set(float64(len(t.Items)))
 
 	t.log.Debugf("Performed scrub %d -> %d", before, len(t.Items))
 }
@@ -344,7 +366,7 @@ func (t *Tracker) addItem(v string) *Item {
 	i := &Item{Seen: time.Now().UTC()}
 	t.Items[v] = i
 
-	trackedItems.WithLabelValues(t.stream, t.replicator).Add(1)
+	trackedItems.WithLabelValues(t.stream, t.replicator, t.worker).Add(1)
 
 	if t.firstSeenCB != nil {
 		go t.firstSeenCB(v, *i)

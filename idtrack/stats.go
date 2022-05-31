@@ -12,7 +12,7 @@ var (
 	trackedItems = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "tracker", "total_items"),
 		Help: "Number of entries being tracked",
-	}, []string{"stream", "replicator"})
+	}, []string{"stream", "replicator", "worker"})
 )
 
 func init() {

@@ -260,7 +260,7 @@ var _ = Describe("Replicator", func() {
 				_, err = js.CreateKeyValue(&nats.KeyValueConfig{Bucket: "CHORIA_LEADER_ELECTION", TTL: 2 * time.Second})
 				Expect(err).ToNot(HaveOccurred())
 
-				ts, tcs := prepareStreams(nc, mgr, 1000)
+				_, tcs := prepareStreams(nc, mgr, 1000)
 				sr, scfg := config(nc.ConnectedUrl())
 				scfg.LeaderElectionName = "ginkgo.example.net"
 
@@ -276,13 +276,6 @@ var _ = Describe("Replicator", func() {
 				defer cancel()
 
 				Eventually(streamMesssage(tcs), "1m").Should(BeNumerically(">=", 1000))
-
-				consumer, err := ts.LoadConsumer(stream.cname)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(consumer.Delete()).ToNot(HaveOccurred())
-
-				publishToSource(nc, "TEST", 1000)
-				Eventually(streamMesssage(tcs), "1m").Should(BeNumerically(">=", 2000))
 			})
 		})
 	})
