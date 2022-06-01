@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -200,7 +201,10 @@ func (t *Tracker) ShouldProcess(v string, sz float64) bool {
 		return true
 	}
 
-	deadline := time.Now().Add(-1 * (t.interval - time.Second))
+	// we splay the deadline by 10% of the interval to avoid big copy spikes
+	splay := rand.Int63n(int64(float64(t.interval) * 0.10))
+	deadline := time.Now().Add(-1 * (t.interval - time.Second - time.Duration(splay)))
+
 	seen, copied, psz := t.lastSeen(v)
 
 	if copied.IsZero() || copied.Before(deadline) {
