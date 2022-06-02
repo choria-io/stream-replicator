@@ -72,7 +72,7 @@ var (
 	ackFailedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "ack_failed_count"),
 		Help: "How many times an ack or nack failed",
-	}, []string{"stream", "replicator"})
+	}, []string{"stream", "replicator", "worker"})
 
 	consumerRepairCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "consumer_recreated"),
