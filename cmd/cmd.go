@@ -13,11 +13,11 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/choria-io/fisk"
 	"github.com/choria-io/stream-replicator/config"
 	"github.com/choria-io/stream-replicator/replicator"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -39,7 +39,7 @@ func Run() {
 		help = fmt.Sprintf("Choria Stream Replicator version %s (%s)", version, []byte(sha)[0:8])
 	}
 
-	app := kingpin.New("stream-replicator", help)
+	app := fisk.New("stream-replicator", help)
 	app.Author("R.I.Pienaar <rip@devco.net>")
 	app.Version(version)
 
@@ -47,10 +47,10 @@ func Run() {
 	repl.Flag("config", "Configuration file").Required().ExistingFileVar(&c.cfgile)
 	repl.Flag("debug", "Enables debug logging").BoolVar(&c.debug)
 
-	kingpin.MustParse(app.Parse(os.Args[1:]))
+	fisk.MustParse(app.Parse(os.Args[1:]))
 }
 
-func (c *cmd) replicateAction(_ *kingpin.ParseContext) error {
+func (c *cmd) replicateAction(_ *fisk.ParseContext) error {
 	cfg, err := config.Load(c.cfgile)
 	if err != nil {
 		return err
