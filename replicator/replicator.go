@@ -358,6 +358,7 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 
 	polled := time.Time{}
 	polls := time.NewTicker(time.Millisecond)
+
 	health := time.NewTicker(s.hcInterval)
 
 	for {
@@ -414,6 +415,9 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 					continue
 				}
 			}
+
+			// we got a message - we know it's healthy, lets postpone health checks
+			health.Reset(s.hcInterval)
 
 			meta, err := s.handler(msg)
 			if err != nil {
