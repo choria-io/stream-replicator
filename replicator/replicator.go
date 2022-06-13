@@ -365,7 +365,6 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 		select {
 		case <-polls.C:
 			if s.isPaused() {
-				s.log.Debugf("Skipping poll while paused")
 				continue
 			}
 
