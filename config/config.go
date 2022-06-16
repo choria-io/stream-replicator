@@ -128,7 +128,7 @@ func (t *TLS) PrivateKey() string {
 	return t.Key
 }
 
-func (c *Config) validate() (err error) {
+func (c *Config) Validate() (err error) {
 	if c.ReplicatorName == "" {
 		return fmt.Errorf("name is required")
 	}
@@ -249,7 +249,7 @@ func Load(file string) (*Config, error) {
 		return nil, err
 	}
 
-	err = config.validate()
+	err = config.Validate()
 	if err != nil {
 		return nil, err
 	}

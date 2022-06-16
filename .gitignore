@@ -6,3 +6,4 @@ vendor
 dist
 patch
 *.patch
+*.test
