@@ -28,11 +28,11 @@ var _ = Describe("Config", func() {
 		}
 	})
 
-	Describe("validate", func() {
+	Describe("Validate", func() {
 		It("Should require a replicator name", func() {
 			cfg.ReplicatorName = ""
 
-			err := cfg.validate()
+			err := cfg.Validate()
 			Expect(err).To(MatchError("name is required"))
 		})
 
@@ -45,13 +45,13 @@ var _ = Describe("Config", func() {
 
 			cfg.StateDirectory = tf.Name()
 
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(tf.Name()).To(BeADirectory())
 		})
 
 		It("Should require a stream", func() {
 			cfg.Streams = []*Stream{{}}
-			Expect(cfg.validate()).To(MatchError("stream not specified"))
+			Expect(cfg.Validate()).To(MatchError("stream not specified"))
 		})
 
 		It("Should support inheriting TLS from the replicator", func() {
@@ -59,7 +59,7 @@ var _ = Describe("Config", func() {
 			cfg.Streams = []*Stream{
 				{Stream: "GINKGO"},
 			}
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].TLS).To(BeIdenticalTo(cfg.TLS))
 			Expect(cfg.Streams[0].SourceTLS).To(BeIdenticalTo(cfg.TLS))
 			Expect(cfg.Streams[0].TargetTLS).To(BeIdenticalTo(cfg.TLS))
@@ -71,7 +71,7 @@ var _ = Describe("Config", func() {
 			cfg.Streams = []*Stream{
 				{Stream: "GINKGO", SourceTLS: stls},
 			}
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].TLS).To(BeIdenticalTo(cfg.TLS))
 			Expect(cfg.Streams[0].SourceTLS).To(BeIdenticalTo(stls))
 			Expect(cfg.Streams[0].TargetTLS).To(BeIdenticalTo(cfg.TLS))
@@ -83,7 +83,7 @@ var _ = Describe("Config", func() {
 			cfg.Streams = []*Stream{
 				{Stream: "GINKGO", TargetTLS: ttls},
 			}
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].TLS).To(BeIdenticalTo(cfg.TLS))
 			Expect(cfg.Streams[0].TargetTLS).To(BeIdenticalTo(ttls))
 			Expect(cfg.Streams[0].SourceTLS).To(BeIdenticalTo(cfg.TLS))
@@ -92,11 +92,11 @@ var _ = Describe("Config", func() {
 		It("Should configure the state file", func() {
 			cfg.StateDirectory = os.TempDir()
 			cfg.Streams = []*Stream{{Stream: "GINKGO"}}
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].StateFile).To(Equal(filepath.Join(os.TempDir(), "GINKGO_GINKGO.json")))
 
 			cfg.Streams[0].Name = "OTHER"
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].StateFile).To(Equal(filepath.Join(os.TempDir(), "GINKGO_OTHER.json")))
 		})
 
@@ -105,27 +105,27 @@ var _ = Describe("Config", func() {
 				Stream:           "GINKGO",
 				StartDeltaString: "wrong",
 			}}
-			Expect(cfg.validate()).To(MatchError("invalid start_delta: invalid time unit g"))
+			Expect(cfg.Validate()).To(MatchError("invalid start_delta: invalid time unit g"))
 			cfg.Streams[0].StartDeltaString = "1h"
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].StartDelta).To(Equal(time.Hour))
 
 			cfg.Streams[0].InspectDurationString = "wrong"
-			Expect(cfg.validate()).To(MatchError("invalid inspect_duration: invalid time unit g"))
+			Expect(cfg.Validate()).To(MatchError("invalid inspect_duration: invalid time unit g"))
 			cfg.Streams[0].InspectDurationString = "1h"
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].InspectDuration).To(Equal(time.Hour))
 
 			cfg.Streams[0].WarnDurationString = "wrong"
-			Expect(cfg.validate()).To(MatchError("invalid warn_duration: invalid time unit g"))
+			Expect(cfg.Validate()).To(MatchError("invalid warn_duration: invalid time unit g"))
 			cfg.Streams[0].WarnDurationString = "1h"
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].WarnDuration).To(Equal(time.Hour))
 
 			cfg.Streams[0].MaxAgeString = "wrong"
-			Expect(cfg.validate()).To(MatchError("invalid max_age: invalid time unit g"))
+			Expect(cfg.Validate()).To(MatchError("invalid max_age: invalid time unit g"))
 			cfg.Streams[0].MaxAgeString = "1h"
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 			Expect(cfg.Streams[0].MaxAgeDuration).To(Equal(time.Hour))
 		})
 
@@ -136,28 +136,28 @@ var _ = Describe("Config", func() {
 				{Stream: "OTHER"},
 			}
 
-			err := cfg.validate()
+			err := cfg.Validate()
 			Expect(err).To(MatchError(errors.New("duplicate stream configuration name GINKGO for stream TEST")))
 
 			cfg.Streams[1].Name = "OTHER"
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 		})
 
 		It("Should support only 1 inspection mode", func() {
 			cfg.Streams = []*Stream{
 				{Stream: "TEST", InspectJSONField: "x"},
 			}
-			Expect(cfg.validate()).ToNot(HaveOccurred())
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
 
 			cfg.Streams = []*Stream{
 				{Stream: "TEST", InspectSubjectToken: 1, InspectJSONField: "x"},
 			}
-			Expect(cfg.validate()).To(MatchError("only one inspection mode can be set per stream"))
+			Expect(cfg.Validate()).To(MatchError("only one inspection mode can be set per stream"))
 
 			cfg.Streams = []*Stream{
 				{Stream: "TEST", InspectHeaderValue: "H", InspectJSONField: "x"},
 			}
-			Expect(cfg.validate()).To(MatchError("only one inspection mode can be set per stream"))
+			Expect(cfg.Validate()).To(MatchError("only one inspection mode can be set per stream"))
 
 		})
 	})
