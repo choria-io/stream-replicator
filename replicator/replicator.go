@@ -607,7 +607,7 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 	}
 
 	return backoff.TwentySec.For(ctx, func(try int) error {
-		s.dest.stream, err = s.source.mgr.LoadOrNewStreamFromDefault(s.cfg.TargetStream, scfg)
+		s.dest.stream, err = s.dest.mgr.LoadOrNewStreamFromDefault(s.cfg.TargetStream, scfg)
 		if err != nil {
 			log.Infof("Loading stream failed on try %d: %v", try, err)
 			return err
