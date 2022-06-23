@@ -38,6 +38,14 @@ var TwentySec = Policy{
 	},
 }
 
+// TwoMinutesSlowStart is a backoff policy ranging from 6 seconds to 120 seconds over 18 intervals
+var TwoMinutesSlowStart = Policy{
+	Millis: []int{
+		6000, 12000, 18000, 24000, 30000, 36000, 42000, 48000, 54000, 60000,
+		66000, 72000, 78000, 84000, 90000, 96000, 102000, 108000,
+	},
+}
+
 // Default is the default backoff policy to use
 var Default = FiveSec
 

@@ -28,7 +28,7 @@ func ConnectNats(ctx context.Context, name string, srv string, tls TLSConfig, ol
 		nats.MaxReconnects(-1),
 		nats.Name(fmt.Sprintf("Choria Stream Replicator: %s", name)),
 		nats.CustomReconnectDelay(func(n int) time.Duration {
-			d := backoff.TwentySec.Duration(n)
+			d := backoff.TwoMinutesSlowStart.Duration(n)
 			log.Infof("Sleeping %v till the next reconnection attempt", d)
 			return d
 		}),
@@ -77,7 +77,7 @@ func ConnectNats(ctx context.Context, name string, srv string, tls TLSConfig, ol
 		urls = append(urls, url.Redacted())
 	}
 
-	err = backoff.Default.For(ctx, func(try int) error {
+	err = backoff.TwoMinutesSlowStart.For(ctx, func(try int) error {
 		log.Infof("Attempting to connect to %s on try %d", strings.Join(urls, ", "), try)
 
 		nc, err = nats.Connect(srv, opts...)
