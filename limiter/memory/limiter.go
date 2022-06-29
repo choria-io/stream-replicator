@@ -28,13 +28,14 @@ type limiter struct {
 	name       string
 	processed  *idtrack.Tracker
 	stateFile  string
+	syncSubj   string
 	log        *logrus.Entry
 	mu         *sync.Mutex
 }
 
 var _EMPTY_ = ""
 
-func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name string, replicator string, log *logrus.Entry) (*limiter, error) {
+func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name string, replicator string, nc *nats.Conn, log *logrus.Entry) (*limiter, error) {
 	if cfg.InspectDuration == 0 {
 		return nil, fmt.Errorf("inspect duration not set, memory limiter can not start")
 	}
@@ -61,6 +62,10 @@ func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name strin
 		mu: &sync.Mutex{},
 	}
 
+	if cfg.AdvisoryConf != nil {
+		l.syncSubj = fmt.Sprintf("choria.stream-replicator.sync.%s.%s", cfg.Stream, cfg.Name)
+	}
+
 	switch {
 	case l.jsonField != _EMPTY_:
 		l.log = l.log.WithField("field", l.jsonField)
@@ -76,7 +81,7 @@ func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name strin
 	}
 
 	var err error
-	l.processed, err = idtrack.New(ctx, wg, l.duration, cfg.WarnDuration, cfg.PayloadSizeTrigger, l.stateFile, l.stream, cfg.Name, replicator, log)
+	l.processed, err = idtrack.New(ctx, wg, l.duration, cfg.WarnDuration, cfg.PayloadSizeTrigger, l.stateFile, l.stream, cfg.Name, replicator, nc, l.syncSubj, log)
 	if err != nil {
 		return nil, err
 	}

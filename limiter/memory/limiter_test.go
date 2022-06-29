@@ -52,7 +52,7 @@ var _ = Describe("Limiter", func() {
 	Describe("ProcessAndRecord", func() {
 		It("Should handle missing fields", func() {
 			cfg.InspectJSONField = "sender"
-			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 			Expect(err).ToNot(HaveOccurred())
 
 			msg := nats.NewMsg("test")
@@ -69,7 +69,7 @@ var _ = Describe("Limiter", func() {
 
 		It("Should handle present json fields", func() {
 			cfg.InspectJSONField = "sender"
-			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 			Expect(err).ToNot(HaveOccurred())
 
 			msg := nats.NewMsg("test")
@@ -97,7 +97,7 @@ var _ = Describe("Limiter", func() {
 
 	It("Should handle absent token values", func() {
 		cfg.InspectSubjectToken = 10
-		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test")
@@ -115,7 +115,7 @@ var _ = Describe("Limiter", func() {
 
 	It("Should handle full subject inspections", func() {
 		cfg.InspectSubjectToken = -1
-		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test.1")
@@ -146,7 +146,7 @@ var _ = Describe("Limiter", func() {
 
 	It("Should handle present token values", func() {
 		cfg.InspectSubjectToken = 2
-		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test.1")
@@ -177,7 +177,7 @@ var _ = Describe("Limiter", func() {
 
 	It("Should handle absent header values", func() {
 		cfg.InspectHeaderValue = "sender"
-		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test")
@@ -194,7 +194,7 @@ var _ = Describe("Limiter", func() {
 
 	It("Should handle present header values", func() {
 		cfg.InspectHeaderValue = "sender"
-		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", log)
+		limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
 		Expect(err).ToNot(HaveOccurred())
 
 		msg := nats.NewMsg("test")

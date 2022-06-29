@@ -44,7 +44,7 @@ var _ = Describe("Tracker", func() {
 		Expect(err).ToNot(HaveOccurred())
 		td.Close()
 
-		tracker, err = New(ctx, &wg, 60*time.Minute, 30*time.Minute, 1024, td.Name(), "TEST", "1", "GINKGO", log)
+		tracker, err = New(ctx, &wg, 60*time.Minute, 30*time.Minute, 1024, td.Name(), "TEST", "1", "GINKGO", nil, "", log)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -158,10 +158,11 @@ var _ = Describe("Tracker", func() {
 		})
 
 		It("Should correctly handle the deadline", func() {
+			tracker.noScrub = true
 			tracker.RecordSeen("new", 2048)
 			tracker.RecordCopied("new")
 
-			tracker.Items["new"].Seen = time.Now().UTC().Add(-1 * 59 * time.Minute)
+			tracker.Items["new"].Seen = time.Now().UTC().Add(-1 * 50 * time.Minute)
 			Expect(tracker.ShouldProcess("new", 2048)).To(BeFalse())
 			tracker.Items["new"].Seen = time.Now().UTC().Add(-1 * time.Hour)
 			Expect(tracker.ShouldProcess("new", 2048)).To(BeTrue())

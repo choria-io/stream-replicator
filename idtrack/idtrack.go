@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/choria-io/stream-replicator/backoff"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,6 +25,7 @@ type Item struct {
 	Copied  time.Time `json:"copied"`
 	Advised bool      `json:"advised,omitempty"`
 	Size    float64   `json:"size"`
+	Value   string    `json:"value,omitempty"`
 }
 
 type Tracker struct {
@@ -32,6 +35,8 @@ type Tracker struct {
 	sizeTrigger float64
 	stateFile   string
 	log         *logrus.Entry
+	nc          *nats.Conn
+	syncSubj    string
 
 	firstSeenCB func(string, Item)
 	warnCB      func(map[string]Item)
@@ -42,6 +47,8 @@ type Tracker struct {
 	replicator string
 	worker     string
 
+	noScrub bool
+
 	sync.Mutex
 }
 
@@ -49,7 +56,7 @@ const (
 	_EMPTY_ = ""
 )
 
-func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn time.Duration, sizeTrigger float64, stateFile string, stream string, worker string, replicator string, log *logrus.Entry) (*Tracker, error) {
+func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn time.Duration, sizeTrigger float64, stateFile string, stream string, worker string, replicator string, nc *nats.Conn, syncSubject string, log *logrus.Entry) (*Tracker, error) {
 	t := &Tracker{
 		Items:       map[string]*Item{},
 		interval:    interval,
@@ -59,6 +66,8 @@ func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn t
 		stream:      stream,
 		worker:      worker,
 		replicator:  replicator,
+		nc:          nc,
+		syncSubj:    syncSubject,
 		Mutex:       sync.Mutex{},
 	}
 
@@ -67,6 +76,11 @@ func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn t
 		"interval": t.interval,
 		"warn":     warn,
 	})
+
+	if t.syncSubj != "" && t.nc != nil {
+		wg.Add(1)
+		go t.clusterSync(ctx, wg)
+	}
 
 	err := t.loadState()
 	if err != nil {
@@ -79,7 +93,56 @@ func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn t
 	return t, nil
 }
 
-// NotifyRecover notifies a callback when an item that exceeded the warn threshold but not yet reached the expired threshold is seen again
+// listens for gossiped items recording when nodes are seen
+func (t *Tracker) clusterSync(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var (
+		sub *nats.Subscription
+		err error
+	)
+
+	err = backoff.Default.For(ctx, func(try int) error {
+		sub, err = t.nc.SubscribeSync(t.syncSubj)
+		return err
+	})
+	if err != nil {
+		return
+	}
+
+	for {
+		msg, err := sub.NextMsgWithContext(ctx)
+		if err != nil {
+			if err == context.Canceled {
+				return
+			}
+
+			continue
+		}
+
+		i := &Item{}
+		err = json.Unmarshal(msg.Data, i)
+		if err != nil {
+			continue
+		}
+
+		if i.Value == "" {
+			continue
+		}
+
+		t.Lock()
+		t.Items[i.Value] = i
+		cnt := len(t.Items)
+		t.Unlock()
+
+		trackedItems.WithLabelValues(t.stream, t.replicator, t.worker).Set(float64(cnt))
+		seenByGossip.WithLabelValues(t.stream, t.replicator, t.worker).Inc()
+
+		t.log.Debugf("Learned that %v was seen via gossip", i.Value)
+	}
+}
+
+// NotifyRecover notifies a callback when an item that exceeded the warning threshold but not yet reached the expired threshold is seen again
 func (t *Tracker) NotifyRecover(cb func(string, Item)) error {
 	t.Lock()
 	defer t.Unlock()
@@ -155,6 +218,16 @@ func (t *Tracker) RecordSeen(v string, sz float64) {
 
 	i.Seen = time.Now().UTC()
 	i.Size = sz
+
+	// gossip the fact that we saw this node
+	if t.syncSubj != "" {
+		si := *i
+		si.Value = v
+		sj, err := json.Marshal(si)
+		if err == nil {
+			t.nc.Publish(t.syncSubj, sj)
+		}
+	}
 }
 
 // RecordCopied records the fact the node data was copied, used to manage sampling
@@ -231,6 +304,7 @@ func (t *Tracker) maintainer(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ticker.C:
 			t.saveState()
+
 		case <-ctx.Done():
 			t.saveState()
 			t.log.Debugf("Maintenance process shutting down")
@@ -288,7 +362,9 @@ func (t *Tracker) saveState() error {
 		return nil
 	}
 
-	t.scrub()
+	if !t.noScrub {
+		t.scrub()
+	}
 
 	if len(t.Items) == 0 {
 		// doesn't matter if it fails, load will scrub anyway

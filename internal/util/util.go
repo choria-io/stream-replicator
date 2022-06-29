@@ -26,6 +26,7 @@ type TLSConfig interface {
 func ConnectNats(ctx context.Context, name string, srv string, tls TLSConfig, oldStyle bool, log *logrus.Entry) (nc *nats.Conn, err error) {
 	opts := []nats.Option{
 		nats.MaxReconnects(-1),
+		nats.NoEcho(),
 		nats.Name(fmt.Sprintf("Choria Stream Replicator: %s", name)),
 		nats.CustomReconnectDelay(func(n int) time.Duration {
 			d := backoff.TwoMinutesSlowStart.Duration(n)
