@@ -378,9 +378,9 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 			}
 
 			if polled.IsZero() {
-				s.log.Infof("Performing poll for messages last poll: never")
+				s.log.Debugf("Performing poll for messages last poll: never")
 			} else {
-				s.log.Infof("Performing poll for messages last poll: %s", time.Since(polled))
+				s.log.Debugf("Performing poll for messages last poll: %s", time.Since(polled))
 			}
 
 			err = nc.PublishMsg(pollMsg)
