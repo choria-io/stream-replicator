@@ -442,9 +442,13 @@ func (s *Stream) copier(ctx context.Context) (err error) {
 				continue
 			}
 
-			res := nextMsg
-			res.Subject = msg.Reply
-			err = msg.RespondMsg(res)
+			if s.isPaused() {
+				err = msg.AckSync()
+			} else {
+				res := nextMsg
+				res.Subject = msg.Reply
+				err = msg.RespondMsg(res)
+			}
 			if err != nil {
 				ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
 				s.log.Errorf("ACK failed: %v", err)
