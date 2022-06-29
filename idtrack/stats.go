@@ -13,8 +13,14 @@ var (
 		Name: prometheus.BuildFQName("choria_stream_replicator", "tracker", "total_items"),
 		Help: "Number of entries being tracked",
 	}, []string{"stream", "replicator", "worker"})
+
+	seenByGossip = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: prometheus.BuildFQName("choria_stream_replicator", "tracker", "seen_by_gossip"),
+		Help: "Number of entries that we learned about via gossip synchronization",
+	}, []string{"stream", "replicator", "worker"})
 )
 
 func init() {
 	prometheus.MustRegister(trackedItems)
+	prometheus.MustRegister(seenByGossip)
 }

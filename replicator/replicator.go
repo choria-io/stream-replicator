@@ -129,17 +129,17 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 	}
 
 	if s.cfg.InspectJSONField != _EMPTY_ && s.cfg.InspectDuration > 0 {
-		s.limiter, err = memory.New(ctx, wg, s.cfg, s.cname, s.sr.ReplicatorName, s.log)
+		nc, err := s.connectAdvisories(ctx)
+		if err != nil {
+			return err
+		}
+
+		s.limiter, err = memory.New(ctx, wg, s.cfg, s.cname, s.sr.ReplicatorName, nc, s.log)
 		if err != nil {
 			return err
 		}
 
 		if s.cfg.AdvisoryConf != nil {
-			nc, err := s.connectAdvisories(ctx)
-			if err != nil {
-				return err
-			}
-
 			s.advisor, err = advisor.New(ctx, wg, s.cfg.AdvisoryConf, nc, s.limiter.Tracker(), s.cfg.InspectJSONField, s.cfg.Stream, s.sr.ReplicatorName, s.log)
 			if err != nil {
 				return err
@@ -186,7 +186,7 @@ func (s *Stream) setupElection(ctx context.Context) error {
 
 	win := func() {
 		s.mu.Lock()
-		s.log.Infof("Became the leader")
+		s.log.Warnf("Became the leader")
 		s.paused = false
 		if s.advisor != nil {
 			s.advisor.Resume()
@@ -196,7 +196,7 @@ func (s *Stream) setupElection(ctx context.Context) error {
 
 	lost := func() {
 		s.mu.Lock()
-		s.log.Infof("Lost the leadership")
+		s.log.Warnf("Lost the leadership")
 		s.paused = true
 		if s.advisor != nil {
 			s.advisor.Pause()
