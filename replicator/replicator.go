@@ -201,6 +201,10 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		if s.advisor != nil {
 			s.advisor.Pause()
 		}
+
+		lagMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(0)
+		streamSequence.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(0)
+
 		s.mu.Unlock()
 	}
 
@@ -524,6 +528,10 @@ func (s *Stream) healthCheckSource() (fixed bool, err error) {
 	}
 
 	stream := s.source.stream
+	if stream == nil {
+		return false, fmt.Errorf("stream %s does not exist, cannot recover consumer", s.cfg.Stream)
+	}
+
 	s.source.consumer, err = stream.LoadConsumer(s.cname)
 	if jsm.IsNatsError(err, 10014) {
 		s.log.Errorf("Consumer %s was not found, attempting to recreate", s.cname)
