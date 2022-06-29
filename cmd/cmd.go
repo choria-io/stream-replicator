@@ -6,12 +6,21 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
+
+	"github.com/choria-io/stream-replicator/advisor"
+	"github.com/choria-io/stream-replicator/idtrack"
+	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/jsm.go/natscontext"
 
 	"github.com/choria-io/fisk"
 	"github.com/choria-io/stream-replicator/config"
@@ -28,7 +37,16 @@ var (
 type cmd struct {
 	cfgile string
 	debug  bool
-	log    *logrus.Entry
+
+	findStream string
+	findValue  string
+	findSince  time.Duration
+	findFollow bool
+	nCtx       string
+	stateDir   string
+	stateValue string
+
+	log *logrus.Entry
 }
 
 func Run() {
@@ -47,7 +65,153 @@ func Run() {
 	repl.Flag("config", "Configuration file").Required().ExistingFileVar(&c.cfgile)
 	repl.Flag("debug", "Enables debug logging").BoolVar(&c.debug)
 
+	admin := app.Command("admin", "Interact with stream advisories and tracking state")
+	admFind := admin.Command("advisories", "Audit advisories for a specific node").Alias("adv").Action(c.findAction)
+	admFind.Arg("stream", "The name of the stream holding advisories").Required().StringVar(&c.findStream)
+	admFind.Arg("value", "The value to search for in the advisories").StringVar(&c.findValue)
+	admFind.Flag("since", "Finds messages since a certain age expressed as a duration like 5m").Default("1m").DurationVar(&c.findSince)
+	admFind.Flag("follow", "Follow when end was reached rather than terminating").Short('f').BoolVar(&c.findFollow)
+	admFind.Flag("context", "The NATS context to use for the connection").StringVar(&c.nCtx)
+
+	admState := admin.Commandf("state", "Search state files").Action(c.findState)
+	admState.Arg("dir", "Directory where state files are kept").Required().ExistingDirVar(&c.stateDir)
+	admState.Arg("value", "The value to search for").Required().StringVar(&c.stateValue)
+
 	fisk.MustParse(app.Parse(os.Args[1:]))
+}
+
+func (c *cmd) findState(_ *fisk.ParseContext) error {
+	return filepath.WalkDir(c.stateDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		if filepath.Ext(path) != ".json" {
+			return nil
+		}
+
+		items := idtrack.Tracker{}
+		sb, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(sb, &items)
+		if err != nil {
+			return err
+		}
+
+		item, ok := items.Items[c.stateValue]
+		if ok {
+			fmt.Printf("%s:\n\n", path)
+
+			fmt.Printf("           Value: %v\n", c.stateValue)
+			if item.Seen.IsZero() {
+				fmt.Printf("       Seen Time: never\n")
+			} else {
+				fmt.Printf("       Seen Time: %v (%v)\n", item.Seen, time.Since(item.Seen).Round(time.Second))
+			}
+
+			if item.Copied.IsZero() {
+				fmt.Printf("     Copied Time: never\n")
+			} else {
+				fmt.Printf("     Copied Time: %v (%v)\n", item.Copied, time.Since(item.Copied).Round(time.Second))
+			}
+			fmt.Printf("    Payload Size: %v\n", item.Size)
+			fmt.Printf("         Advised: %t\n", item.Advised)
+
+			fmt.Println()
+		}
+
+		return nil
+	})
+}
+
+func (c *cmd) findAction(_ *fisk.ParseContext) error {
+	if c.nCtx == "" && natscontext.SelectedContext() == "" {
+		return fmt.Errorf("a NATS context is required when a default context is not selected")
+	}
+
+	nc, err := natscontext.Connect(c.nCtx)
+	if err != nil {
+		return err
+	}
+
+	mgr, err := jsm.New(nc)
+	if err != nil {
+		return err
+	}
+
+	sub, err := nc.SubscribeSync(nc.NewRespInbox())
+	if err != nil {
+		return err
+	}
+
+	opts := []jsm.ConsumerOption{jsm.DeliverySubject(sub.Subject), jsm.AcknowledgeExplicit(), jsm.MaxAckPending(1)}
+	if c.findSince > 0 {
+		opts = append(opts, jsm.StartAtTimeDelta(c.findSince))
+	}
+
+	_, err = mgr.NewConsumer(c.findStream, opts...)
+	if err != nil {
+		return err
+	}
+
+	cnt := 0
+
+	for {
+		msg, err := sub.NextMsg(time.Second)
+		if err != nil {
+			if cnt == 0 {
+				return fmt.Errorf("did not found any messages for %q", c.findValue)
+			} else {
+				if c.findFollow {
+					continue
+				}
+				return err
+			}
+		}
+
+		meta, _ := jsm.ParseJSMsgMetadata(msg)
+
+		if cnt == 0 && meta != nil {
+			if c.findValue == "" {
+				fmt.Printf("Searching for advisories\n\n")
+			} else {
+				fmt.Printf("Searching %d messages for advisories related to %v\n\n", meta.Pending()+1, c.findValue)
+			}
+
+		}
+
+		msg.Ack()
+		cnt++
+
+		if len(msg.Data) == 0 {
+			continue
+		}
+
+		adv := &advisor.AgeAdvisoryV2{}
+		err = json.Unmarshal(msg.Data, adv)
+		if err != nil {
+			fmt.Printf("Could not process message %q: %v\n", msg.Data, err)
+			continue
+		}
+
+		if c.findValue == "" || adv.Value == c.findValue {
+			ts := time.Unix(adv.Timestamp, 0)
+			seen := time.Unix(adv.Seen, 0)
+			fmt.Printf("[%v] %7s %s seen %v earlier on %s\n", ts.Format("2006-01-02 15:04:05"), adv.Event, adv.Value, ts.Sub(seen), adv.Replicator)
+		}
+
+		if !c.findFollow && meta != nil && meta.Pending() == 0 {
+			break
+		}
+	}
+
+	return nil
 }
 
 func (c *cmd) replicateAction(_ *fisk.ParseContext) error {
