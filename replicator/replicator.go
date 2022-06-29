@@ -201,6 +201,10 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		if s.advisor != nil {
 			s.advisor.Pause()
 		}
+
+		lagMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(0)
+		streamSequence.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(0)
+
 		s.mu.Unlock()
 	}
 

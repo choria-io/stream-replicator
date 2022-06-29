@@ -328,6 +328,8 @@ func (t *Tracker) scrub() {
 	before := len(t.Items)
 
 	expireDeadline := time.Now().Add(-1 * t.interval)
+	// to avoid notifying about old stuff loaded from disk etc
+	expireIgnoreDeadline := time.Now().Add(-2 * t.interval)
 	expired := map[string]Item{}
 	shouldExpire := t.expireCB != nil
 
@@ -339,7 +341,7 @@ func (t *Tracker) scrub() {
 
 	for v, item := range t.Items {
 		if item.Seen.Before(expireDeadline) {
-			if shouldExpire {
+			if shouldExpire && !item.Seen.Before(expireIgnoreDeadline) {
 				expired[v] = *item
 			}
 			deletes = append(deletes, v)
