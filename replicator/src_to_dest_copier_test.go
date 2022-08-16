@@ -25,7 +25,7 @@ func TestReplicator(t *testing.T) {
 	RunSpecs(t, "Replicator")
 }
 
-var _ = Describe("Replicator", func() {
+var _ = Describe("Source to Destination Copier", func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
@@ -38,11 +38,11 @@ var _ = Describe("Replicator", func() {
 		logger := logrus.New()
 		logger.SetOutput(GinkgoWriter)
 		log = logrus.NewEntry(logger)
-	})
 
-	AfterEach(func() {
-		cancel()
-		wg.Wait()
+		DeferCleanup(func() {
+			cancel()
+			wg.Wait()
+		})
 	})
 
 	config := func(srv string) (*config.Config, *config.Stream) {
@@ -118,7 +118,7 @@ var _ = Describe("Replicator", func() {
 		})
 	})
 
-	Describe("Run", func() {
+	Describe("copyMessages", func() {
 		It("Should copy all data without inspection", func() {
 			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
 				_, tcs := prepareStreams(nc, mgr, 1000)

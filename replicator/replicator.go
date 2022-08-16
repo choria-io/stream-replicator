@@ -6,11 +6,9 @@ package replicator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/choria-io/stream-replicator/advisor"
@@ -23,13 +21,16 @@ import (
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/api"
 	"github.com/nats-io/nats.go"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
 type Limiter interface {
 	ProcessAndRecord(msg *nats.Msg, f func(msg *nats.Msg, process bool) error) error
 	Tracker() *idtrack.Tracker
+}
+
+type copier interface {
+	copyMessages(context.Context) error
 }
 
 type Stream struct {
@@ -41,10 +42,9 @@ type Stream struct {
 	dest       *Target
 	limiter    Limiter
 	advisor    *advisor.Advisor
-	copied     int64
-	skipped    int64
 	hcInterval time.Duration
 	paused     bool
+	copier     copier
 	mu         *sync.Mutex
 }
 
@@ -110,9 +110,8 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 		hcInterval: time.Minute,
 		paused:     stream.LeaderElectionName != _EMPTY_,
 		log: log.WithFields(logrus.Fields{
-			"source":   stream.Stream,
-			"target":   stream.TargetStream,
-			"consumer": name,
+			"source": stream.Stream,
+			"target": stream.TargetStream,
 		}),
 	}, nil
 }
@@ -155,7 +154,13 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 		}
 	}
 
-	err = s.copier(ctx)
+	if s.cfg.TargetInitiated {
+		s.copier = newTargetInitiatedCopier(s, s.log)
+	} else {
+		s.copier = newSourceInitiatedCopier(s, s.log)
+	}
+
+	err = s.copier.copyMessages(ctx)
 	if err != nil {
 		s.log.Errorf("Copier failed: %v", err)
 		return err
@@ -171,6 +176,20 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 	s.dest.Close()
 
 	return nil
+}
+
+func (s *Stream) targetForSubject(subj string) string {
+	if s.cfg.TargetPrefix != _EMPTY_ {
+		subj = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, subj)
+		subj = strings.Replace(subj, "..", ".", -1)
+	}
+
+	if s.cfg.TargetRemoveString != _EMPTY_ {
+		subj = strings.Replace(subj, s.cfg.TargetRemoveString, "", -1)
+		subj = strings.Replace(subj, "..", ".", -1)
+	}
+
+	return subj
 }
 
 func (s *Stream) setupElection(ctx context.Context) error {
@@ -231,246 +250,10 @@ func (s *Stream) limitedProcess(msg *nats.Msg, cb func(msg *nats.Msg, process bo
 	return s.limiter.ProcessAndRecord(msg, cb)
 }
 
-func (s *Stream) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
-	receivedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-	receivedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Add(float64(len(msg.Data)))
-	obs := prometheus.NewTimer(processTime.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name))
-	defer obs.ObserveDuration()
-
-	if msg.Header == nil {
-		msg.Header = nats.Header{}
-	}
-
-	meta, err := jsm.ParseJSMsgMetadata(msg)
-	if err == nil {
-		lagMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(float64(meta.Pending()))
-		streamSequence.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Set(float64(meta.StreamSequence()))
-
-		if s.cfg.MaxAgeDuration > 0 && time.Since(meta.TimeStamp()) > s.cfg.MaxAgeDuration {
-			ageSkippedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-			return meta, nil
-		}
-
-		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, meta.StreamSequence(), s.sr.ReplicatorName, s.cfg.Name, meta.TimeStamp().UnixMilli()))
-	} else {
-		s.log.Warnf("Could not parse message metadata from %v: %v", msg.Reply, err)
-		metaParsingFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-		msg.Header.Add(srcHeader, fmt.Sprintf(srcHeaderPattern, s.cfg.Stream, -1, s.sr.ReplicatorName, s.cfg.Name, -1))
-	}
-
-	return meta, s.limitedProcess(msg, func(msg *nats.Msg, process bool) error {
-		if meta != nil && meta.StreamSequence()%1000 == 0 {
-			copied := atomic.LoadInt64(&s.copied)
-			skipped := atomic.LoadInt64(&s.skipped)
-			s.log.Infof("Handling message %d, %d message(s) behind, copied %d skipped %d", meta.StreamSequence(), meta.Pending(), copied, skipped)
-		}
-
-		if !process {
-			atomic.AddInt64(&s.skipped, 1)
-			skippedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-			skippedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Add(float64(len(msg.Data)))
-			return nil
-		}
-
-		if s.cfg.TargetPrefix != _EMPTY_ {
-			msg.Subject = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, msg.Subject)
-			msg.Subject = strings.Replace(msg.Subject, "..", ".", -1)
-		}
-
-		if s.cfg.TargetRemoveString != _EMPTY_ {
-			msg.Subject = strings.Replace(msg.Subject, s.cfg.TargetRemoveString, "", -1)
-			msg.Subject = strings.Replace(msg.Subject, "..", ".", -1)
-		}
-
-		resp, err := s.dest.nc.RequestMsg(msg, 2*time.Second)
-		if err != nil {
-			return err
-		}
-
-		err = jsm.ParseErrorResponse(resp)
-		if err != nil {
-			return err
-		}
-
-		atomic.AddInt64(&s.copied, 1)
-		if meta != nil {
-			s.log.Debugf("Copied message seq %d, %d message(s) behind", meta.StreamSequence(), meta.Pending())
-		}
-
-		copiedMessageCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-		copiedMessageSize.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Add(float64(len(msg.Data)))
-
-		return nil
-	})
-}
-
-func (s *Stream) nakMsg(msg *nats.Msg, meta *jsm.MsgInfo) (time.Duration, error) {
-	r := nats.NewMsg(msg.Reply)
-	next := backoff.TwentySec.Duration(20)
-	if meta != nil {
-		next = backoff.TwentySec.Duration(meta.Delivered())
-	}
-	r.Data = []byte(fmt.Sprintf(`%s {"delay": %d}`, api.AckNak, next))
-
-	err := msg.RespondMsg(r)
-	if err != nil {
-		ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-		return next, err
-	}
-
-	return next, nil
-}
-
 func (s *Stream) isPaused() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.paused
-}
-
-func (s *Stream) copier(ctx context.Context) (err error) {
-	msgs := make(chan *nats.Msg, 10)
-
-	s.source.mu.Lock()
-	nextSubj := s.source.consumer.NextSubject()
-	nc := s.source.nc
-	ib := nc.NewRespInbox()
-	s.source.sub, err = nc.ChanQueueSubscribe(ib, _EMPTY_, msgs)
-	s.source.mu.Unlock()
-	if err != nil {
-		return err
-	}
-
-	req := api.JSApiConsumerGetNextRequest{
-		Expires: pollFrequency,
-		Batch:   1,
-	}
-
-	pollRequest, err := json.Marshal(&req)
-	if err != nil {
-		return err
-	}
-	pollMsg := nats.NewMsg(nextSubj)
-	pollMsg.Reply = ib
-	pollMsg.Data = pollRequest
-
-	if err != nil {
-		return err
-	}
-	nextMsg := nats.NewMsg(nextSubj)
-	nextMsg.Reply = ib
-	nextMsg.Data = []byte(fmt.Sprintf("%s %s", string(api.AckNext), string(pollRequest)))
-
-	polled := time.Time{}
-	polls := time.NewTicker(time.Millisecond)
-
-	health := time.NewTicker(s.hcInterval)
-
-	for {
-		select {
-		case <-polls.C:
-			if s.isPaused() {
-				continue
-			}
-
-			if time.Since(polled) < pollFrequency {
-				polls.Reset(pollFrequency)
-				continue
-			}
-
-			if polled.IsZero() {
-				s.log.Debugf("Performing poll for messages last poll: never")
-			} else {
-				s.log.Debugf("Performing poll for messages last poll: %s", time.Since(polled))
-			}
-
-			err = nc.PublishMsg(pollMsg)
-			if err != nil {
-				s.log.Errorf("Could not request next messages: %v", err)
-				continue
-			}
-
-			polled = time.Now()
-			polls.Reset(pollFrequency)
-
-		case <-health.C:
-			s.log.Debugf("Performing health checks")
-
-			fixed, err := s.healthCheckSource()
-			if err != nil {
-				s.log.Errorf("Source health check failed: %v", err)
-			}
-
-			if fixed {
-				s.log.Warnf("Source consumer %s recreated", s.cname)
-				consumerRepairCount.WithLabelValues(s.source.stream.Name(), s.sr.ReplicatorName, s.cfg.Name).Inc()
-				polled = time.Time{}
-				polls.Reset(time.Microsecond)
-			}
-
-		case msg := <-msgs:
-			if len(msg.Data) == 0 && msg.Header != nil {
-				status := msg.Header.Get("Status")
-				if status == "404" || status == "408" || status == "409" {
-					// poll expired basically so poll again
-					// could also be a NxT that expired though so the poll has
-					// a protection against polling too often so this is safe
-					polls.Reset(time.Microsecond)
-					continue
-				}
-			}
-
-			// we got a message - we know it's healthy, lets postpone health checks
-			health.Reset(s.hcInterval)
-
-			meta, err := s.handler(msg)
-			if err != nil {
-				next, nerr := s.nakMsg(msg, meta)
-				if nerr != nil {
-					s.log.Errorf("Could not NaK message %v", err)
-				}
-
-				if meta != nil {
-					s.log.Errorf("Handling msg %d failed on try %d, backing off for %v: %v", meta.StreamSequence(), meta.Delivered(), next, err)
-				} else {
-					s.log.Errorf("Handling msg failed, backing off for %v: %v", next, err)
-				}
-
-				polls.Reset(next)
-
-				handlerErrorCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-
-				continue
-			}
-
-			if s.isPaused() {
-				err = msg.AckSync()
-			} else {
-				res := nextMsg
-				res.Subject = msg.Reply
-				err = msg.RespondMsg(res)
-			}
-			if err != nil {
-				ackFailedCount.WithLabelValues(s.cfg.Stream, s.sr.ReplicatorName, s.cfg.Name).Inc()
-				s.log.Errorf("ACK failed: %v", err)
-				continue
-			}
-
-			if meta != nil {
-				s.source.mu.Lock()
-				s.source.resumeSeq = meta.StreamSequence()
-				s.source.mu.Unlock()
-			}
-
-			polls.Reset(pollFrequency)
-
-		case <-ctx.Done():
-			s.source.nc.Close()
-			s.dest.nc.Close()
-
-			s.log.Warnf("Copier shutting down after context interrupt")
-			return
-		}
-	}
 }
 
 func (s *Stream) connect(ctx context.Context) error {
@@ -496,54 +279,6 @@ func (s *Stream) connect(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (s *Stream) healthCheckSource() (fixed bool, err error) {
-	s.source.mu.Lock()
-	defer s.source.mu.Unlock()
-
-	opts := []jsm.ConsumerOption{
-		jsm.DurableName(s.cname),
-		jsm.ConsumerDescription(fmt.Sprintf("Choria Stream Replicator %s", s.cfg.Name)),
-		jsm.AcknowledgeExplicit(),
-		jsm.MaxAckPending(1),
-		jsm.AckWait(30 * time.Second),
-	}
-
-	if s.cfg.FilterSubject != _EMPTY_ {
-		opts = append(opts, jsm.FilterStreamBySubject(s.cfg.FilterSubject))
-	}
-
-	if s.source.resumeSeq > 0 {
-		opts = append(opts, jsm.StartAtSequence(s.source.resumeSeq))
-	} else {
-		switch {
-		case s.cfg.StartAtEnd:
-			opts = append(opts, jsm.StartWithNextReceived())
-		case s.cfg.StartSequence > 0:
-			opts = append(opts, jsm.StartAtSequence(s.cfg.StartSequence))
-		case s.cfg.StartDelta > 0:
-			opts = append(opts, jsm.StartAtTime(time.Now().UTC().Add(-1*s.cfg.StartDelta)))
-		case !s.cfg.StartTime.IsZero():
-			opts = append(opts, jsm.StartAtTime(s.cfg.StartTime.UTC()))
-		default:
-			opts = append(opts, jsm.DeliverAllAvailable())
-		}
-	}
-
-	stream := s.source.stream
-	if stream == nil {
-		return false, fmt.Errorf("stream %s does not exist, cannot recover consumer", s.cfg.Stream)
-	}
-
-	s.source.consumer, err = stream.LoadConsumer(s.cname)
-	if jsm.IsNatsError(err, 10014) {
-		s.log.Errorf("Consumer %s was not found, attempting to recreate", s.cname)
-		s.source.consumer, err = stream.NewConsumerFromDefault(jsm.DefaultConsumer, opts...)
-		fixed = err == nil
-	}
-
-	return fixed, err
 }
 
 func (s *Stream) connectAdvisories(ctx context.Context) (nc *nats.Conn, err error) {
@@ -577,7 +312,6 @@ func (s *Stream) connectSource(ctx context.Context) (err error) {
 
 	s.source.cfg = s.source.stream.Configuration()
 
-	_, err = s.healthCheckSource()
 	return err
 }
 
