@@ -49,6 +49,8 @@ type Stream struct {
 	SourceURL string `json:"source_url"`
 	// TargetURL is the NATS server to send messages to in nats://user:pass@server form
 	TargetURL string `json:"target_url"`
+	// TargetInitiated indicates that the replicator is running nearest to the target and so will use a latency optimized approach
+	TargetInitiated bool `json:"target_initiated"`
 	// StartSequence is an optional initial sequence to replicate from
 	StartSequence uint64 `json:"start_sequence"`
 	// StartTime is an optional initial time to replicate from in the RFC3339 form eg. 2006-01-02T15:04:05Z07:00
@@ -225,6 +227,18 @@ func (c *Config) Validate() (err error) {
 			s.MaxAgeDuration, err = util.ParseDurationString(s.MaxAgeString)
 			if err != nil {
 				return fmt.Errorf("invalid max_age: %v", err)
+			}
+		}
+
+		if s.TargetInitiated {
+			if s.FilterSubject == "" {
+				return fmt.Errorf("filter_subject is required with target_initiated")
+			}
+			if s.MaxAgeString != "" {
+				return fmt.Errorf("max_age cannot be used with target_initiated")
+			}
+			if inspections > 0 {
+				return fmt.Errorf("message inspection and sampling cannot be used with target_initiated")
 			}
 		}
 	}

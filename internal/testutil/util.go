@@ -5,7 +5,6 @@
 package testutil
 
 import (
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -22,12 +21,12 @@ type logger struct {
 	*logrus.Entry
 }
 
-func (l *logger) Noticef(format string, v ...interface{}) {
+func (l *logger) Noticef(format string, v ...any) {
 	l.Infof(format, v...)
 }
 
 func WithJetStream(log *logrus.Entry, cb func(nc *nats.Conn, mgr *jsm.Manager)) {
-	d, err := ioutil.TempDir("", "jstest")
+	d, err := os.MkdirTemp("", "jstest")
 	Expect(err).ToNot(HaveOccurred())
 	defer os.RemoveAll(d)
 
