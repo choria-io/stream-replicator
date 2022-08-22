@@ -264,43 +264,53 @@ func (c *targetInitiatedCopier) handler(ctx context.Context, msg *nats.Msg) (*js
 	return meta, nil
 }
 
-func (c *targetInitiatedCopier) getStartSequence() (uint64, error) {
+func (c *targetInitiatedCopier) getStartSequence() (uint64, time.Time, error) {
 	msg, err := c.dest.stream.ReadLastMessageForSubject(c.s.targetForSubject(c.cfg.FilterSubject))
 	if err != nil {
-		// no message found means we start fresh, need to think about expiry on target and how to resume that
+		// no message found means we start fresh check if a purge was done and if it
+		// was we continue from the purge time, else start fresh
 		if jsm.IsNatsError(err, 10037) {
-			return 0, nil
+			nfo, err := c.dest.stream.Information()
+			if err != nil {
+				return 0, time.Time{}, fmt.Errorf("could not load stream info for purge resolution: %v", err)
+			}
+			if nfo.State.LastSeq > 0 && nfo.State.Msgs == 0 {
+				c.log.Warnf("Detected a purge on %s with last message sequence %d, resuming from purge time %s", c.dest.stream.Name(), nfo.State.LastSeq, nfo.State.LastTime)
+				return 0, nfo.State.LastTime, nil
+			}
+
+			return 0, time.Time{}, nil
 		}
 
-		return 0, err
+		return 0, time.Time{}, err
 	}
 
 	hdrs, err := decodeHeadersMsg(msg.Header)
 	if err != nil {
-		return 0, err
+		return 0, time.Time{}, err
 	}
 
 	src := hdrs.Get("Choria-SR-Source")
 	if src == "" {
-		return 0, fmt.Errorf("last message is not a stream replicator message")
+		return 0, time.Time{}, fmt.Errorf("last message is not a stream replicator message")
 	}
 	parts := strings.Split(src, " ")
 	if len(parts) != 5 {
-		return 0, fmt.Errorf("last message has an invalid header: %v", src)
+		return 0, time.Time{}, fmt.Errorf("last message has an invalid header: %v", src)
 	}
 
 	if parts[0] != c.cfg.Stream {
-		return 0, fmt.Errorf("last message is from a different stream %s", c.cfg.Name)
+		return 0, time.Time{}, fmt.Errorf("last message is from a different stream %s", c.cfg.Name)
 	}
 
 	seq, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return 0, err
+		return 0, time.Time{}, err
 	}
 
 	c.log.Debugf("Detected last message from stream %s sequence %d", parts[0], seq)
 
-	return uint64(seq) + 1, nil
+	return uint64(seq) + 1, time.Time{}, nil
 }
 
 func (c *targetInitiatedCopier) healthCheckSource() (bool, error) {
@@ -311,11 +321,12 @@ func (c *targetInitiatedCopier) healthCheckSource() (bool, error) {
 
 	// no ephemeral ever created so we get the start sequence from the target stream
 	if c.source.consumer == nil {
-		rSeq, err := c.getStartSequence()
+		rSeq, rTs, err := c.getStartSequence()
 		if err != nil {
 			return false, err
 		}
 		c.source.resumeSeq = rSeq
+		c.source.resumeTime = rTs
 		return c.recreateEphemeraLocked()
 	}
 
@@ -366,6 +377,9 @@ func (c *targetInitiatedCopier) recreateEphemeraLocked() (bool, error) {
 	if c.source.resumeSeq > 0 {
 		c.log.Infof("Resuming consumer from stream sequence %d", c.source.resumeSeq)
 		opts = append(opts, jsm.StartAtSequence(c.source.resumeSeq))
+	} else if !c.source.resumeTime.IsZero() {
+		c.log.Infof("Resuming consumer from stream timestamp %s", c.source.resumeTime)
+		opts = append(opts, jsm.StartAtTime(c.source.resumeTime))
 	} else {
 		switch {
 		case c.cfg.StartAtEnd:

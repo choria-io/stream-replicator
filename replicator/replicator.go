@@ -49,14 +49,15 @@ type Stream struct {
 }
 
 type Target struct {
-	mgr       *jsm.Manager
-	stream    *jsm.Stream
-	consumer  *jsm.Consumer
-	cfg       api.StreamConfig
-	nc        *nats.Conn
-	mu        *sync.Mutex
-	sub       *nats.Subscription
-	resumeSeq uint64
+	mgr        *jsm.Manager
+	stream     *jsm.Stream
+	consumer   *jsm.Consumer
+	cfg        api.StreamConfig
+	nc         *nats.Conn
+	mu         *sync.Mutex
+	sub        *nats.Subscription
+	resumeSeq  uint64
+	resumeTime time.Time
 }
 
 const (
