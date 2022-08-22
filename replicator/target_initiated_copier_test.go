@@ -121,7 +121,7 @@ var _ = Describe("Target Initiated Copier", func() {
 				go func() {
 					defer GinkgoRecover()
 					wg.Add(1)
-					Expect(stream.Run(ctx, &wg)).ToNot(HaveOccurred())
+					Expect(stream.Run(ctx, &wg)).To(Succeed())
 				}()
 				Eventually(streamMesssage(tcs)).Should(BeNumerically("==", 1000))
 
@@ -180,7 +180,7 @@ var _ = Describe("Target Initiated Copier", func() {
 				go func() {
 					defer GinkgoRecover()
 					wg.Add(1)
-					Expect(stream.Run(runCtx, &wg)).ToNot(HaveOccurred())
+					Expect(stream.Run(runCtx, &wg)).To(Succeed())
 				}()
 				Eventually(streamMesssage(tcs)).Should(BeNumerically("==", 1000))
 				runCancel()
@@ -197,7 +197,7 @@ var _ = Describe("Target Initiated Copier", func() {
 				go func() {
 					defer GinkgoRecover()
 					wg.Add(1)
-					Expect(stream.Run(runCtx, &wg)).ToNot(HaveOccurred())
+					Expect(stream.Run(runCtx, &wg)).To(Succeed())
 				}()
 				// and total messages should be 2k
 				Eventually(streamMesssage(tcs)).Should(BeNumerically("==", 2000))
@@ -228,6 +228,58 @@ var _ = Describe("Target Initiated Copier", func() {
 			})
 		})
 
+		It("Should resume from the correct location after purge", func() {
+			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+				ts, tcs := prepareStreams(nc, mgr, 1000)
+
+				// copy the first 1000 messages
+				sr, scfg := config(nc.ConnectedUrl())
+				stream, err := NewStream(scfg, sr, log)
+				Expect(err).ToNot(HaveOccurred())
+
+				runCtx, runCancel := context.WithTimeout(ctx, time.Second)
+				go func() {
+					defer GinkgoRecover()
+					wg.Add(1)
+					Expect(stream.Run(runCtx, &wg)).To(Succeed())
+				}()
+				Eventually(streamMesssage(tcs)).Should(BeNumerically("==", 1000))
+				runCancel()
+				wg.Wait()
+
+				Expect(tcs.Purge()).To(Succeed())
+				pt := time.Now()
+
+				// start it new, it should now resume based on the timestamp
+				runCtx, runCancel = context.WithTimeout(ctx, 100*time.Second)
+				stream, err = NewStream(scfg, sr, log)
+				Expect(err).ToNot(HaveOccurred())
+				go func() {
+					defer GinkgoRecover()
+					wg.Add(1)
+					Expect(stream.Run(runCtx, &wg)).To(Succeed())
+				}()
+
+				// lets the copier make the consumer
+				time.Sleep(500 * time.Millisecond)
+
+				Expect(stream.source.consumer).To(Not(BeNil()))
+				Expect(stream.source.consumer.Configuration().OptStartTime).To(Not(BeNil()))
+				Expect(*stream.source.consumer.Configuration().OptStartTime).To(BeTemporally("~", pt, 10*time.Millisecond))
+
+				// publish another 1000
+				publishToSource(nc, "TEST", 1000)
+				Eventually(streamMesssage(ts)).Should(BeNumerically("==", 2000))
+
+				// and total messages should be 1k, as we purged 1000 out it should now only sent the newest 1000
+				Eventually(streamMesssage(tcs)).Should(BeNumerically("==", 1000))
+
+				runCancel()
+				wg.Wait()
+
+			})
+		})
+
 		It("Should copy all data", func() {
 			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
 				_, tcs := prepareStreams(nc, mgr, 1000)
@@ -239,7 +291,7 @@ var _ = Describe("Target Initiated Copier", func() {
 				go func() {
 					defer GinkgoRecover()
 					wg.Add(1)
-					Expect(stream.Run(ctx, &wg)).ToNot(HaveOccurred())
+					Expect(stream.Run(ctx, &wg)).To(Succeed())
 				}()
 				defer cancel()
 
