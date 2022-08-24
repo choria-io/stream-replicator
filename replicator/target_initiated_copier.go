@@ -323,7 +323,7 @@ func (c *targetInitiatedCopier) healthCheckSource() (bool, error) {
 	if c.source.consumer == nil {
 		rSeq, rTs, err := c.getStartSequence()
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("could not obtain start sequence: %v", err)
 		}
 		c.source.resumeSeq = rSeq
 		c.source.resumeTime = rTs
@@ -383,14 +383,19 @@ func (c *targetInitiatedCopier) recreateEphemeraLocked() (bool, error) {
 	} else {
 		switch {
 		case c.cfg.StartAtEnd:
+			c.log.Infof("Starting with next received message")
 			opts = append(opts, jsm.StartWithNextReceived())
 		case c.cfg.StartSequence > 0:
+			c.log.Infof("Starting with sequence %d", c.cfg.StartSequence)
 			opts = append(opts, jsm.StartAtSequence(c.cfg.StartSequence))
 		case c.cfg.StartDelta > 0:
+			c.log.Infof("Starting with time delta %v", c.cfg.StartDelta)
 			opts = append(opts, jsm.StartAtTime(time.Now().UTC().Add(-1*c.cfg.StartDelta)))
 		case !c.cfg.StartTime.IsZero():
+			c.log.Infof("Starting with absolute time %v", c.cfg.StartTime)
 			opts = append(opts, jsm.StartAtTime(c.cfg.StartTime.UTC()))
 		default:
+			c.log.Infof("Starting with all available messages")
 			opts = append(opts, jsm.DeliverAllAvailable())
 		}
 	}
