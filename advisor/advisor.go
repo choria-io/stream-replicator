@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -130,6 +131,9 @@ func (a *Advisor) publisher(ctx context.Context, wg *sync.WaitGroup) {
 	publisher := func(advisory *AgeAdvisoryV2) error {
 		advisoryCount.WithLabelValues(string(advisory.Event), a.stream, a.replicator).Inc()
 
+		subject := strings.ReplaceAll(a.cfg.Subject, "%s", string(advisory.Event))
+		subject = strings.ReplaceAll(subject, "%v", advisory.Value)
+
 		d, err := json.Marshal(advisory)
 		if err != nil {
 			return err
@@ -147,10 +151,10 @@ func (a *Advisor) publisher(ctx context.Context, wg *sync.WaitGroup) {
 			}
 
 			if !a.cfg.Reliable {
-				return a.nc.Publish(a.cfg.Subject, d)
+				return a.nc.Publish(subject, d)
 			}
 
-			msg := nats.NewMsg(a.cfg.Subject)
+			msg := nats.NewMsg(subject)
 			msg.Data = d
 			if advisory.EventID != _EMPTY_ {
 				msg.Header.Add(api.JSMsgId, advisory.EventID)

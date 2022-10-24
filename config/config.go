@@ -98,7 +98,7 @@ type Stream struct {
 }
 
 type Advisory struct {
-	// Subject is the NATS subject to publish messages too, a %s in the string will be replaced by the event type
+	// Subject is the NATS subject to publish messages too, a %s in the string will be replaced by the event type, %v with the value
 	Subject string `json:"subject"`
 
 	// Reliable indicates that the subject is a JetStream subject, so we should retry deliveries of advisories
