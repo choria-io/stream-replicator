@@ -26,6 +26,8 @@ type Config struct {
 	TLS *TLS `json:"tls"`
 	// MonitorPort is where prometheus stats will be exposed
 	MonitorPort int `json:"monitor_port"`
+	// Profiling enables starting go profiling on the monitor port
+	Profiling bool `json:"profiling"`
 	// LogLevel file to log to, stdout when empty
 	LogFile string `json:"logfile"`
 	// LogLevel is the logging level: debug, warn or info
