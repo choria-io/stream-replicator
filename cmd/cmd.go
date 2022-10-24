@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	pphttp "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"sync"
 	"syscall"
 	"time"
@@ -46,6 +49,7 @@ type cmd struct {
 	stateDir   string
 	stateValue string
 
+	mu  sync.Mutex
 	log *logrus.Entry
 }
 
@@ -231,7 +235,7 @@ func (c *cmd) replicateAction(_ *fisk.ParseContext) error {
 
 	go c.interruptHandler(ctx, cancel)
 
-	go c.setupPrometheus(cfg.MonitorPort)
+	go c.setupPrometheus(cfg.MonitorPort, cfg.Profiling)
 
 	for _, s := range cfg.Streams {
 		c.log.Debugf("Configuring stream %s", s.Name)
@@ -257,15 +261,31 @@ func (c *cmd) replicateAction(_ *fisk.ParseContext) error {
 	return nil
 }
 
-func (c *cmd) setupPrometheus(port int) {
+func (c *cmd) setupPrometheus(port int, profiling bool) {
 	if port == 0 {
 		c.log.Infof("Skipping Prometheus setup")
 		return
 	}
 
 	c.log.Infof("Listening for /metrics on %d", port)
-	http.Handle("/metrics", promhttp.Handler())
-	c.log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
+	if profiling {
+		c.log.Warnf("Enabling live profiling on /debug/pprof")
+		mux.HandleFunc("/debug/pprof/", pphttp.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pphttp.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pphttp.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pphttp.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pphttp.Trace)
+	}
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: mux,
+	}
+
+	c.log.Fatal(server.ListenAndServe())
 }
 
 func (c *cmd) configureLogging(cfg *config.Config) (*logrus.Entry, error) {
@@ -301,15 +321,58 @@ func (c *cmd) configureLogging(cfg *config.Config) (*logrus.Entry, error) {
 
 func (c *cmd) interruptHandler(ctx context.Context, cancel context.CancelFunc) {
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	for {
 		select {
 		case sig := <-sigs:
+			if sig == syscall.SIGQUIT {
+				c.log.Warnf("Dumping internal state on signal %s", sig)
+				c.dumpGoRoutines()
+				continue
+			}
+
 			c.log.Warnf("Shutting down on signal %s", sig)
 			cancel()
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func (c *cmd) dumpGoRoutines() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now().UnixNano()
+	pid := os.Getpid()
+
+	tdoutname := filepath.Join(os.TempDir(), fmt.Sprintf("sr-threaddump-%d-%d.txt", pid, now))
+	memoutname := filepath.Join(os.TempDir(), fmt.Sprintf("sr-memoryprofile-%d-%d.mprof", pid, now))
+
+	buf := make([]byte, 1<<20)
+	stacklen := runtime.Stack(buf, true)
+
+	err := os.WriteFile(tdoutname, buf[:stacklen], 0644)
+	if err != nil {
+		c.log.Errorf("Could not produce thread dump: %s", err)
+		return
+	}
+
+	c.log.Warnf("Produced thread dump to %s", tdoutname)
+
+	mf, err := os.Create(memoutname)
+	if err != nil {
+		c.log.Errorf("Could not produce memory profile: %s", err)
+		return
+	}
+	defer mf.Close()
+
+	err = pprof.WriteHeapProfile(mf)
+	if err != nil {
+		c.log.Errorf("Could not produce memory profile: %s", err)
+		return
+	}
+
+	c.log.Warnf("Produced memory profile to %s", memoutname)
 }
