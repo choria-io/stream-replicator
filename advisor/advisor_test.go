@@ -58,7 +58,7 @@ var _ = Describe("Advisor", func() {
 	})
 
 	setup := func(nc *nats.Conn) (*Advisor, error) {
-		return New(ctx, &wg, &config.Advisory{Subject: "advisories"}, nc, tracker, "sender", "STREAM", "GINKGO", log)
+		return New(ctx, &wg, &config.Advisory{Subject: "advisories.%s.%v"}, nc, tracker, "sender", "STREAM", "GINKGO", log)
 	}
 
 	assertAdvisoryType := func(msg *nats.Msg, v string, et EventType) {
@@ -82,15 +82,16 @@ var _ = Describe("Advisor", func() {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
-			sub, err := nc.SubscribeSync("advisories")
+			sub, err := nc.SubscribeSync("advisories.>")
 			Expect(err).ToNot(HaveOccurred())
 
-			adv.firstSeenCB("new", idtrack.Item{Seen: time.Now()})
+			adv.firstSeenCB("ginkgo.example.net", idtrack.Item{Seen: time.Now()})
 
 			msg, err := sub.NextMsg(time.Second)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(msg.Subject).To(Equal("advisories.new.ginkgo.example.net"))
 
-			assertAdvisoryType(msg, "new", FirstSeenEvent)
+			assertAdvisoryType(msg, "ginkgo.example.net", FirstSeenEvent)
 		})
 	})
 
@@ -99,7 +100,7 @@ var _ = Describe("Advisor", func() {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
-			sub, err := nc.SubscribeSync("advisories")
+			sub, err := nc.SubscribeSync("advisories.>")
 			Expect(err).ToNot(HaveOccurred())
 
 			adv.expireCB(map[string]idtrack.Item{
@@ -109,10 +110,12 @@ var _ = Describe("Advisor", func() {
 
 			msg, err := sub.NextMsg(time.Second)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(msg.Subject).To(Equal("advisories.expire.new"))
 			assertAdvisoryType(msg, "new", ExpireEvent)
 
 			msg, err = sub.NextMsg(time.Second)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(msg.Subject).To(Equal("advisories.expire.old"))
 			assertAdvisoryType(msg, "old", ExpireEvent)
 		})
 	})
@@ -122,15 +125,16 @@ var _ = Describe("Advisor", func() {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
-			sub, err := nc.SubscribeSync("advisories")
+			sub, err := nc.SubscribeSync("advisories.>")
 			Expect(err).ToNot(HaveOccurred())
 
-			adv.recoverCB("new", idtrack.Item{Seen: time.Now()})
+			adv.recoverCB("ginkgo.example.net", idtrack.Item{Seen: time.Now()})
 
 			msg, err := sub.NextMsg(time.Second)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(msg.Subject).To(Equal("advisories.recover.ginkgo.example.net"))
 
-			assertAdvisoryType(msg, "new", RecoverEvent)
+			assertAdvisoryType(msg, "ginkgo.example.net", RecoverEvent)
 		})
 	})
 
@@ -139,7 +143,7 @@ var _ = Describe("Advisor", func() {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
-			sub, err := nc.SubscribeSync("advisories")
+			sub, err := nc.SubscribeSync("advisories.>")
 			Expect(err).ToNot(HaveOccurred())
 
 			tracker.EXPECT().RecordAdvised("new").Times(1)
@@ -152,10 +156,12 @@ var _ = Describe("Advisor", func() {
 
 			msg, err := sub.NextMsg(time.Second)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(msg.Subject).To(Equal("advisories.timeout.new"))
 			assertAdvisoryType(msg, "new", TimeoutEvent)
 
 			msg, err = sub.NextMsg(time.Second)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(msg.Subject).To(Equal("advisories.timeout.old"))
 			assertAdvisoryType(msg, "old", TimeoutEvent)
 		})
 	})
