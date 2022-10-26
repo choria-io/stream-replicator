@@ -137,8 +137,6 @@ func (t *Tracker) clusterSync(ctx context.Context, wg *sync.WaitGroup) {
 
 		trackedItems.WithLabelValues(t.stream, t.replicator, t.worker).Set(float64(cnt))
 		seenByGossip.WithLabelValues(t.stream, t.replicator, t.worker).Inc()
-
-		t.log.Debugf("Learned that %v was seen via gossip", i.Value)
 	}
 }
 
