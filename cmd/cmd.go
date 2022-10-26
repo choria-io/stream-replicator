@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -48,6 +49,7 @@ type cmd struct {
 	nCtx       string
 	stateDir   string
 	stateValue string
+	json       bool
 
 	mu  sync.Mutex
 	log *logrus.Entry
@@ -64,6 +66,8 @@ func Run() {
 	app := fisk.New("stream-replicator", help)
 	app.Author("R.I.Pienaar <rip@devco.net>")
 	app.Version(version)
+	app.UsageTemplate(fisk.CompactMainUsageTemplate)
+	app.ErrorUsageTemplate(fisk.CompactMainUsageTemplate)
 
 	repl := app.Command("replicate", "Starts the Stream Replicator process").Default().Action(c.replicateAction)
 	repl.Flag("config", "Configuration file").Required().ExistingFileVar(&c.cfgile)
@@ -81,7 +85,10 @@ func Run() {
 	admState.Arg("dir", "Directory where state files are kept").Required().ExistingDirVar(&c.stateDir)
 	admState.Arg("value", "The value to search for").Required().StringVar(&c.stateValue)
 
-	fisk.MustParse(app.Parse(os.Args[1:]))
+	admGossip := admin.Commandf("gossip", "View the synchronization traffic").Action(c.gossipAction)
+	admGossip.Flag("json", "Render JSON values").BoolVar(&c.json)
+
+	app.MustParseWithUsage(os.Args[1:])
 }
 
 func (c *cmd) findState(_ *fisk.ParseContext) error {
@@ -134,6 +141,44 @@ func (c *cmd) findState(_ *fisk.ParseContext) error {
 	})
 }
 
+func (c *cmd) gossipAction(_ *fisk.ParseContext) error {
+	if c.nCtx == "" && natscontext.SelectedContext() == "" {
+		return fmt.Errorf("a NATS context is required when a default context is not selected")
+	}
+
+	nc, err := natscontext.Connect(c.nCtx)
+	if err != nil {
+		return err
+	}
+
+	prefix := "choria.stream-replicator.sync."
+	sub, err := nc.SubscribeSync(fmt.Sprintf("%s>", prefix))
+	if err != nil {
+		return err
+	}
+
+	for {
+		msg, err := sub.NextMsg(time.Minute)
+		if err != nil {
+			return err
+		}
+
+		if c.json {
+			fmt.Println(string(msg.Data))
+			continue
+		}
+
+		i := &idtrack.Item{}
+		err = json.Unmarshal(msg.Data, i)
+		if err != nil {
+			c.log.Errorf("Could not process sync item: %v", err)
+			continue
+		}
+
+		fmt.Printf("[%s] size: %.0f advised: %t: copied: %s %s\n", strings.TrimPrefix(msg.Subject, prefix), i.Size, i.Advised, time.Since(i.Copied).Round(time.Millisecond), i.Value)
+	}
+}
+
 func (c *cmd) findAction(_ *fisk.ParseContext) error {
 	if c.nCtx == "" && natscontext.SelectedContext() == "" {
 		return fmt.Errorf("a NATS context is required when a default context is not selected")
@@ -170,7 +215,7 @@ func (c *cmd) findAction(_ *fisk.ParseContext) error {
 		msg, err := sub.NextMsg(time.Second)
 		if err != nil {
 			if cnt == 0 {
-				return fmt.Errorf("did not found any messages for %q", c.findValue)
+				return fmt.Errorf("did not find any messages for %q", c.findValue)
 			} else {
 				if c.findFollow {
 					continue
