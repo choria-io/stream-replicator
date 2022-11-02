@@ -259,7 +259,7 @@ func Load(file string) (*Config, error) {
 		return nil, err
 	}
 
-	config := &Config{}
+	config := &Config{Profiling: true}
 	err = json.Unmarshal(j, config)
 	if err != nil {
 		return nil, err
