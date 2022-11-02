@@ -232,7 +232,7 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		s.advisor.Pause()
 	}
 
-	e, err := election.NewElection(s.cfg.LeaderElectionName, fmt.Sprintf("%s_%s", s.cname, s.cfg.Stream), kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
+	e, err := election.NewElection(s.cfg.LeaderElectionName, fmt.Sprintf("%s_%s", s.cname, s.cfg.Stream), kv, election.WithReplicator(s.sr.ReplicatorName), election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
 	if err != nil {
 		return err
 	}
