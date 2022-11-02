@@ -96,13 +96,14 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 
 	polled := time.Time{}
 	polls := time.NewTicker(pollFrequency)
-
 	health := time.NewTicker(time.Millisecond)
 
 	for {
 		select {
 		case <-polls.C:
 			if c.s.isPaused() {
+				c.log.Infof("Not polling while paused")
+				polls.Reset(pollFrequency)
 				continue
 			}
 
@@ -128,6 +129,8 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 
 		case <-health.C:
 			if c.s.isPaused() {
+				c.log.Infof("Not health checking while paused")
+				health.Reset(c.s.hcInterval)
 				continue
 			}
 
