@@ -19,6 +19,7 @@ type options struct {
 	bucket     nats.KeyValue
 	ttl        time.Duration
 	cInterval  time.Duration
+	replicator string
 	wonCb      func()
 	lostCb     func()
 	campaignCb func(s State)
@@ -49,4 +50,9 @@ func OnCampaign(cb func(s State)) Option {
 // WithDebug sets a function to do debug logging with
 func WithDebug(cb func(format string, a ...any)) Option {
 	return func(o *options) { o.debug = cb }
+}
+
+// WithReplicator sets the replicator name for monitoring
+func WithReplicator(r string) Option {
+	return func(o *options) { o.replicator = r }
 }

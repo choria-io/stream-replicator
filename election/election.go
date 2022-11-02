@@ -73,9 +73,10 @@ func NewElection(name string, key string, bucket nats.KeyValue, opts ...Option) 
 		state:   UnknownState,
 		lastSeq: math.MaxUint64,
 		opts: &options{
-			name:   name,
-			key:    key,
-			bucket: bucket,
+			name:       name,
+			key:        key,
+			bucket:     bucket,
+			replicator: "unknown",
 		},
 	}
 
@@ -119,7 +120,7 @@ func (e *election) debugf(format string, a ...any) {
 }
 
 func (e *election) campaignForLeadership() error {
-	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[CandidateState]).Inc()
+	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[CandidateState], e.opts.replicator).Inc()
 
 	seq, err := e.opts.bucket.Create(e.opts.key, []byte(e.opts.name))
 	if err != nil {
@@ -131,13 +132,13 @@ func (e *election) campaignForLeadership() error {
 	e.state = LeaderState
 	e.tries = 0
 	e.notifyNext = true // sets state that would notify about win on next campaign
-	leaderGauge.WithLabelValues(e.opts.key, e.opts.name).Set(1)
+	leaderGauge.WithLabelValues(e.opts.key, e.opts.name, e.opts.replicator).Set(1)
 
 	return nil
 }
 
 func (e *election) maintainLeadership() error {
-	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[LeaderState]).Inc()
+	campaignsCounter.WithLabelValues(e.opts.key, e.opts.name, stateNames[LeaderState], e.opts.replicator).Inc()
 
 	seq, err := e.opts.bucket.Update(e.opts.key, []byte(e.opts.name), e.lastSeq)
 	if err != nil {
@@ -145,7 +146,7 @@ func (e *election) maintainLeadership() error {
 		e.state = CandidateState
 		e.lastSeq = math.MaxUint64
 
-		leaderGauge.WithLabelValues(e.opts.key, e.opts.name).Set(0)
+		leaderGauge.WithLabelValues(e.opts.key, e.opts.name, e.opts.replicator).Set(0)
 
 		if e.opts.lostCb != nil {
 			e.opts.lostCb()
@@ -201,10 +202,10 @@ func (e *election) campaign(wg *sync.WaitGroup) error {
 	var ticker *time.Ticker
 	if e.opts.bo != nil {
 		d := e.opts.bo.Duration(0)
-		campaignIntervalGauge.WithLabelValues(e.opts.key, e.opts.name).Set(d.Seconds())
+		campaignIntervalGauge.WithLabelValues(e.opts.key, e.opts.name, e.opts.replicator).Set(d.Seconds())
 		ticker = time.NewTicker(d)
 	} else {
-		campaignIntervalGauge.WithLabelValues(e.opts.key, e.opts.name).Set(e.opts.cInterval.Seconds())
+		campaignIntervalGauge.WithLabelValues(e.opts.key, e.opts.name, e.opts.replicator).Set(e.opts.cInterval.Seconds())
 		ticker = time.NewTicker(e.opts.cInterval)
 	}
 
@@ -216,7 +217,7 @@ func (e *election) campaign(wg *sync.WaitGroup) error {
 
 		if e.opts.bo != nil {
 			d := e.opts.bo.Duration(e.tries)
-			campaignIntervalGauge.WithLabelValues(e.opts.key, e.opts.name).Set(d.Seconds())
+			campaignIntervalGauge.WithLabelValues(e.opts.key, e.opts.name, e.opts.replicator).Set(d.Seconds())
 			ticker.Reset(d)
 		}
 	}
