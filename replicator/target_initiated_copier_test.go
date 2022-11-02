@@ -237,7 +237,7 @@ var _ = Describe("Target Initiated Copier", func() {
 				stream, err := NewStream(scfg, sr, log)
 				Expect(err).ToNot(HaveOccurred())
 
-				runCtx, runCancel := context.WithTimeout(ctx, time.Second)
+				runCtx, runCancel := context.WithTimeout(ctx, 2*time.Second)
 				go func() {
 					defer GinkgoRecover()
 					wg.Add(1)

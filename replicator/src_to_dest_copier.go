@@ -145,7 +145,7 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 				c.log.Warnf("Source consumer %s recreated", c.cname)
 				consumerRepairCount.WithLabelValues(c.source.stream.Name(), c.sr.ReplicatorName, c.cfg.Name).Inc()
 				polled = time.Time{}
-				polls.Reset(time.Microsecond)
+				polls.Reset(50 * time.Millisecond)
 			}
 
 			health.Reset(c.s.hcInterval)
@@ -154,10 +154,6 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 			if len(msg.Data) == 0 && msg.Header != nil {
 				status := msg.Header.Get("Status")
 				if status == "404" || status == "408" || status == "409" {
-					// poll expired basically so poll again
-					// could also be a NxT that expired though so the poll has
-					// a protection against polling too often so this is safe
-					polls.Reset(time.Microsecond)
 					continue
 				}
 			}
@@ -178,7 +174,9 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 					c.log.Errorf("Handling msg failed, backing off for %v: %v", next, err)
 				}
 
-				polls.Reset(next)
+				if !c.s.isPaused() {
+					polls.Reset(next)
+				}
 
 				handlerErrorCount.WithLabelValues(c.cfg.Stream, c.sr.ReplicatorName, c.cfg.Name).Inc()
 
