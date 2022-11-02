@@ -131,6 +131,7 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 
 		case <-c.health.C:
 			if c.s.isPaused() {
+				c.health.Reset(c.s.hcInterval)
 				continue
 			}
 
