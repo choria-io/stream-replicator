@@ -34,10 +34,6 @@ This is a work in progress, it is core-feature complete and has extensive tests,
 produced by Chef Ohai, subject to network latency, this replicator can easily copy 4000 messages / sec unsampled
 and more when sampling is enabled.
 
-Immediate term feature goals are:
-
- * HA Clustering
-
 ## Relation to previous version
 
 Previously a Stream Replicator projected existed here that support NATS Streaming Server.  This project has now been archived

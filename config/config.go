@@ -1,4 +1,4 @@
-// Copyright (c) 2022, R.I. Pienaar and the Choria Project contributors
+// Copyright (c) 2022-2023, R.I. Pienaar and the Choria Project contributors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -22,8 +22,10 @@ type Config struct {
 	Streams []*Stream `json:"streams"`
 	// StateDirectory is where limiters will store state
 	StateDirectory string `json:"state_store"`
-	// TLS configures a overall default TLS when not set in stream or target/source level
+	// TLS configures an overall default TLS when not set in stream or target/source level
 	TLS *TLS `json:"tls"`
+	// ChoriaConn configures an overall defaults Choria configuration when not set in stream or start/source level
+	ChoriaConn *ChoriaConnection `json:"choria"`
 	// MonitorPort is where prometheus stats will be exposed
 	MonitorPort int `json:"monitor_port"`
 	// Profiling enables starting go profiling on the monitor port
@@ -67,6 +69,13 @@ type Stream struct {
 	SourceTLS *TLS `json:"source_tls"`
 	// TargetTLS overrides TLS for the target only
 	TargetTLS *TLS `json:"target_tls"`
+	// ChoriaConn is Choria connection settings that would be used, see also SourceChoriaConn and TargetChoriaConn
+	ChoriaConn *ChoriaConnection `json:"choria"`
+	// SourceChoriaConn overrides the Choria connection for a specific source only
+	SourceChoriaConn *ChoriaConnection `json:"source_choria"`
+	// TargetChoriaConn overrides the Choria connection for a specific target only
+	TargetChoriaConn *ChoriaConnection `json:"target_choria"`
+
 	// MaxAgeString will skip messages older than this
 	MaxAgeString string `json:"max_age"`
 	// InspectJSONField will inspect a specific field in JSON payloads and limit sends by this field
@@ -105,6 +114,31 @@ type Advisory struct {
 
 	// Reliable indicates that the subject is a JetStream subject, so we should retry deliveries of advisories
 	Reliable bool `json:"reliable"`
+}
+
+type ChoriaConnection struct {
+	SeedFileName   string `json:"seed_file"`
+	JWTFileName    string `json:"jwt_file"`
+	CollectiveName string `json:"collective"`
+}
+
+func (c *ChoriaConnection) Collective() string {
+	if c == nil {
+		return ""
+	}
+	return c.CollectiveName
+}
+func (c *ChoriaConnection) SeedFile() string {
+	if c == nil {
+		return ""
+	}
+	return c.SeedFileName
+}
+func (c *ChoriaConnection) TokenFile() string {
+	if c == nil {
+		return ""
+	}
+	return c.JWTFileName
 }
 
 type TLS struct {
@@ -185,17 +219,27 @@ func (c *Config) Validate() (err error) {
 		if c.TLS == nil {
 			c.TLS = &TLS{}
 		}
-
 		if s.TLS == nil {
 			s.TLS = c.TLS
 		}
-
 		if s.SourceTLS == nil {
 			s.SourceTLS = s.TLS
 		}
-
 		if s.TargetTLS == nil {
 			s.TargetTLS = s.TLS
+		}
+
+		if c.ChoriaConn == nil {
+			c.ChoriaConn = &ChoriaConnection{}
+		}
+		if s.ChoriaConn == nil {
+			s.ChoriaConn = c.ChoriaConn
+		}
+		if s.SourceChoriaConn == nil {
+			s.SourceChoriaConn = s.ChoriaConn
+		}
+		if s.TargetChoriaConn == nil {
+			s.TargetChoriaConn = s.ChoriaConn
 		}
 
 		if c.StateDirectory != "" {

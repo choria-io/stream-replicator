@@ -1,4 +1,4 @@
-// Copyright (c) 2022, R.I. Pienaar and the Choria Project contributors
+// Copyright (c) 2022-2023, R.I. Pienaar and the Choria Project contributors
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -283,17 +283,13 @@ func (s *Stream) connect(ctx context.Context) error {
 }
 
 func (s *Stream) connectAdvisories(ctx context.Context) (nc *nats.Conn, err error) {
-	tls := s.cfg.SourceTLS
-
-	return util.ConnectNats(ctx, "stream-replicator-advisories", s.cfg.SourceURL, tls, false, s.log.WithField("connection", "advisories"))
+	return util.ConnectNats(ctx, "stream-replicator-advisories", s.cfg.SourceURL, s.cfg.SourceTLS, s.cfg.SourceChoriaConn, false, s.log.WithField("connection", "advisories"))
 }
 
 func (s *Stream) connectSource(ctx context.Context) (err error) {
-	tls := s.cfg.SourceTLS
-
 	log := s.log.WithField("connection", "source")
 
-	s.source, err = s.setupConnection(ctx, s.cfg.SourceURL, tls, log)
+	s.source, err = s.setupConnection(ctx, s.cfg.SourceURL, s.cfg.SourceTLS, s.cfg.SourceChoriaConn, log)
 	if err != nil {
 		return fmt.Errorf("source connection failed: %v", err)
 	}
@@ -317,8 +313,6 @@ func (s *Stream) connectSource(ctx context.Context) (err error) {
 }
 
 func (s *Stream) connectDestination(ctx context.Context) (err error) {
-	tls := s.cfg.TargetTLS
-
 	s.source.mu.Lock()
 	scfg := s.source.cfg
 	s.source.mu.Unlock()
@@ -348,7 +342,7 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 
 	log := s.log.WithField("connection", "target")
 
-	s.dest, err = s.setupConnection(ctx, s.cfg.TargetURL, tls, log)
+	s.dest, err = s.setupConnection(ctx, s.cfg.TargetURL, s.cfg.TargetTLS, s.cfg.TargetChoriaConn, log)
 	if err != nil {
 		return fmt.Errorf("source connection failed: %v", err)
 	}
@@ -364,11 +358,11 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 	})
 }
 
-func (s *Stream) setupConnection(ctx context.Context, url string, tls *config.TLS, log *logrus.Entry) (*Target, error) {
+func (s *Stream) setupConnection(ctx context.Context, url string, tls *config.TLS, choria *config.ChoriaConnection, log *logrus.Entry) (*Target, error) {
 	t := &Target{mu: &sync.Mutex{}}
 	var err error
 
-	t.nc, err = util.ConnectNats(ctx, s.cfg.Stream, url, tls, true, log)
+	t.nc, err = util.ConnectNats(ctx, s.cfg.Stream, url, tls, choria, true, log)
 	if err != nil {
 		return nil, err
 	}

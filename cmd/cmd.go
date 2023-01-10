@@ -66,8 +66,6 @@ func Run() {
 	app := fisk.New("stream-replicator", help)
 	app.Author("R.I.Pienaar <rip@devco.net>")
 	app.Version(version)
-	app.UsageTemplate(fisk.CompactMainUsageTemplate)
-	app.ErrorUsageTemplate(fisk.CompactMainUsageTemplate)
 
 	repl := app.Command("replicate", "Starts the Stream Replicator process").Default().Action(c.replicateAction)
 	repl.Flag("config", "Configuration file").Required().ExistingFileVar(&c.cfgile)
