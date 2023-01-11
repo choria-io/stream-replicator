@@ -18,7 +18,6 @@ allowing a central aggregator to have a more granular time window awareness than
 
 Multiple Streams can be replicated and order is preserved.
 
- * [Status](#status)
  * [Documentation](https://choria-io.github.io/stream-replicator/)
  * [Discussions](https://github.com/choria-io/stream-replicator/discussions)
  * [Slack](https://slack.puppet.com/) in channel `#choria`

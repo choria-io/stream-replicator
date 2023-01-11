@@ -52,7 +52,7 @@ streams:
 
 ### Sampling
 
-Lets configure the Replicator to start sampling the above configuration on the `sender` field in the payload:
+Let's configure the Replicator to start sampling the above configuration on the `sender` field in the payload:
 
 ```yaml
 streams:
@@ -83,4 +83,8 @@ The `size_trigger` accommodates the typical scenario where full metadata might b
 
 Pick the `inspect_duration` based on your needs but ensure that it is longer than frequency the nodes will publish data at else all data will be copies.
 
-See [Sampling Advisories](../../monitoring/#sampling-advisories) for details about advisories.
+{{% notice style="tip" %}}
+The advisory subject can have `%s` in it that will be replaced with the event type (like `timeout`) and a `%v` that will be replaced with the value being tracked. Use this to partition the advisories or to help searching a large store of them
+{{% /notice %}}
+
+We configure advisories that will inform us about statusses of data, advisories will be published to a Stream with the subject `NODE_DATA_ADVISORIES` and they will be retried a few times should they fail. See [Sampling Advisories](../../monitoring/#sampling-advisories) for details about advisories.
