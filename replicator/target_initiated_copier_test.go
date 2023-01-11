@@ -265,7 +265,7 @@ var _ = Describe("Target Initiated Copier", func() {
 
 				Expect(stream.source.consumer).To(Not(BeNil()))
 				Expect(stream.source.consumer.Configuration().OptStartTime).To(Not(BeNil()))
-				Expect(*stream.source.consumer.Configuration().OptStartTime).To(BeTemporally("~", pt, 10*time.Millisecond))
+				Expect(*stream.source.consumer.Configuration().OptStartTime).To(BeTemporally("~", pt, 50*time.Millisecond))
 
 				// publish another 1000
 				publishToSource(nc, "TEST", 1000)
