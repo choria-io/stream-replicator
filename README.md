@@ -1,4 +1,4 @@
-![Choria Stream Replicator](https://raw.githubusercontent.com/choria-io/stream-replicator/main/images/logo.png)
+![Choria Stream Replicator](https://choria-io.github.io/stream-replicator/logo.png)
 
 ## Overview
 
