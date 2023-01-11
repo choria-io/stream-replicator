@@ -14,7 +14,7 @@ or when there is a significant change in the data being sent.
 When sampling it publishes advisories about senders that have not been seen recently and other significant events 
 allowing a central aggregator to have a more granular time window awareness than it could get by looking at its data alone.
 
-![Deployment](https://raw.githubusercontent.com/choria-io/stream-replicator/main/images/deployment.png)
+![Deployment](https://choria-io.github.io/stream-replicator/deployment.png)
 
 Multiple Streams can be replicated and order is preserved.
 

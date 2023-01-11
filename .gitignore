@@ -7,3 +7,4 @@ dist
 patch
 *.patch
 *.test
+.hugo_build.lock
