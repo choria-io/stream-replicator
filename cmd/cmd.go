@@ -85,6 +85,7 @@ func Run() {
 
 	admGossip := admin.Commandf("gossip", "View the synchronization traffic").Action(c.gossipAction)
 	admGossip.Flag("json", "Render JSON values").BoolVar(&c.json)
+	admGossip.Flag("context", "The NATS context to use for the connection").StringVar(&c.nCtx)
 
 	app.MustParseWithUsage(os.Args[1:])
 }

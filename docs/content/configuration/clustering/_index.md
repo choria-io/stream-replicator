@@ -114,14 +114,14 @@ From this point we simply create a normal leader elected stream configuration th
 
 ```yaml
 streams:
-  - stream: NODE_DATA_P0
+  - stream: NODE_DATA
     source_url: nats://nats.us-east.example.net:4222
     target_url: nats://nats.central.example.net:4222
     target_initiated: true
     leader_election_name: NODE_DATA_P0
     filter_subject: NODES.US-EAST-1.0.>
 
-  - stream: NODE_DATA_P1
+  - stream: NODE_DATA
     source_url: nats://nats.us-east.example.net:4222
     target_url: nats://nats.central.example.net:4222
     target_initiated: true

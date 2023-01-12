@@ -5,6 +5,19 @@ weight = 40
 pre = "<b>4. </b>"
 +++
 
+## Message Source Information
+
+Every message that gets copied has a header added called `Choria-SR-Source` with an example being `CHORIA_REGISTRATION 10631 US-EAST-1 PARTITION1 1673433286805`.
+Using this you can determine where any copied message is from, which worker copied it and the delay between the message creation, and it's arriving in the target.
+
+From this we know the following:
+
+ * The source stream is called `CHORIA_REGISTRATION`
+ * The message we are looking at has a Stream Sequence of `10631` in the source stream
+ * The replicator name (configured using top level `name` in the config file) is `US-EAST-1`
+ * The `name` set on the `stream` configuration is `PARTITION1` this allows you to tell which specific copier config copied it, helping to identify ordering or partition logic issues
+ * The message was stored in the source at `1673433286805` which is a milliseconds since Unix epoch. Delta between this and the message creation time in the target is how long copy took
+
 ## Sampling Advisories
 
 Advisories are created for sampled streams as described in [Copying Samples of Data](../configuration/sampling). Read on for full detail about those advisories.
@@ -59,6 +72,10 @@ will only make sense when deployed clustered or when data sampling is enabled.
 When sampling the Replicator will publish advisories about node states. If you store these in a stream by ingesting `choria.registration.advisories.>`
 you can search for a specific or just view all data:
 
+{{% notice style="tip" %}}
+You need a configuration context that can be created using `nats context`, this command accept `--context` or will use the selected context
+{{% /notice %}}
+
 ```nohighlight
 $ stream-replicator admin advisories REGISTRATION_ADVISORIES node1.example.net --since 5h
 Searching 17185 messages for advisories related to node1.example.net
@@ -87,6 +104,10 @@ $ sudo stream-replicator admin state /var/lib/stream-replicator node1.example.ne
 
 When deploying the replicator in a cluster it will sync the state shown above using a gossip protocol, you can observe
 this in real time:
+
+{{% notice style="tip" %}}
+You need a configuration context that can be created using `nats context`, this command accept `--context` or will use the selected context
+{{% /notice %}}
 
 ```nohighlight
 $ stream-replicator admin gossip
