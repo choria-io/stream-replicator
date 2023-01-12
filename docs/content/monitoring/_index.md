@@ -5,6 +5,19 @@ weight = 40
 pre = "<b>4. </b>"
 +++
 
+## Message Source Information
+
+Every message that gets copied has a header added called `Choria-SR-Source` with an example being `CHORIA_REGISTRATION 10631 US-EAST-1 PARTITION1 1673433286805`.
+Using this you can determine where any copied message is from, which worker copied it and the delay between the message creation, and it's arriving in the target.
+
+From this we know the following:
+
+ * The source stream is called `CHORIA_REGISTRATION`
+ * The message we are looking at has a Stream Sequence of `10631` in the source stream
+ * The replicator name (configured using top level `name` in the config file) is `US-EAST-1`
+ * The `name` set on the `stream` configuration is `PARTITION1` this allows you to tell which specific copier config copied it, helping to identify ordering or partition logic issues
+ * The message was stored in the source at `1673433286805` which is a milliseconds since Unix epoch. Delta between this and the message creation time in the target is how long copy took
+
 ## Sampling Advisories
 
 Advisories are created for sampled streams as described in [Copying Samples of Data](../configuration/sampling). Read on for full detail about those advisories.
@@ -53,6 +66,13 @@ Each advisory looks like this:
 
 The `stream-replicator` command comes with a number of tools to inspect the state and behavior of the system. Most of these
 will only make sense when deployed clustered or when data sampling is enabled.
+
+{{% notice style="tip" %}}
+Some of these commands connect to NATS. You need a configuration context that can be created using `nats context`, this command accept `--context` or will use the selected context.
+
+To connect to Choria Brokers in Organization Issuer mode pass `--choria-jwt` and `--choria-seed` with your Choria tokens. 
+{{% /notice %}}
+
 
 ### Searching Advisories
 

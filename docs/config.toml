@@ -13,7 +13,7 @@ author = "Choria Project"
 disableLanguageSwitchingButton = true
 themeVariant = "choria-relearn"
 disableInlineCopyToClipBoard = true
-alwaysopen = false
+alwaysopen = true
 showVisitedLinks = false
 disableLandingPageButton = true
 

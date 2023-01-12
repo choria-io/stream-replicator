@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -21,10 +22,12 @@ import (
 	"syscall"
 	"time"
 
+	fw "github.com/choria-io/go-choria/choria"
 	"github.com/choria-io/stream-replicator/advisor"
 	"github.com/choria-io/stream-replicator/idtrack"
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/natscontext"
+	"github.com/nats-io/nats.go"
 
 	"github.com/choria-io/fisk"
 	"github.com/choria-io/stream-replicator/config"
@@ -42,14 +45,17 @@ type cmd struct {
 	cfgile string
 	debug  bool
 
-	findStream string
-	findValue  string
-	findSince  time.Duration
-	findFollow bool
-	nCtx       string
-	stateDir   string
-	stateValue string
-	json       bool
+	findStream       string
+	findValue        string
+	findSince        time.Duration
+	findFollow       bool
+	nCtx             string
+	stateDir         string
+	stateValue       string
+	json             bool
+	choriaToken      string
+	choriaSeed       string
+	choriaCollective string
 
 	mu  sync.Mutex
 	log *logrus.Entry
@@ -66,10 +72,10 @@ func Run() {
 	app := fisk.New("stream-replicator", help)
 	app.Author("R.I.Pienaar <rip@devco.net>")
 	app.Version(version)
+	app.Flag("debug", "Enables debug logging").UnNegatableBoolVar(&c.debug)
 
 	repl := app.Command("replicate", "Starts the Stream Replicator process").Default().Action(c.replicateAction)
 	repl.Flag("config", "Configuration file").Required().ExistingFileVar(&c.cfgile)
-	repl.Flag("debug", "Enables debug logging").BoolVar(&c.debug)
 
 	admin := app.Command("admin", "Interact with stream advisories and tracking state")
 	admFind := admin.Command("advisories", "Audit advisories for a specific node").Alias("adv").Action(c.findAction)
@@ -78,6 +84,9 @@ func Run() {
 	admFind.Flag("since", "Finds messages since a certain age expressed as a duration like 5m").Default("1m").DurationVar(&c.findSince)
 	admFind.Flag("follow", "Follow when end was reached rather than terminating").Short('f').BoolVar(&c.findFollow)
 	admFind.Flag("context", "The NATS context to use for the connection").StringVar(&c.nCtx)
+	admFind.Flag("choria-seed", "The seed file to connect to Choria Brokers with").ExistingFileVar(&c.choriaSeed)
+	admFind.Flag("choria-token", "The JWT token file to connect to Choria Brokers with").ExistingFileVar(&c.choriaToken)
+	admFind.Flag("choria-collective", "The Choria collective you will be connecting to").Default("choria").StringVar(&c.choriaCollective)
 
 	admState := admin.Commandf("state", "Search state files").Action(c.findState)
 	admState.Arg("dir", "Directory where state files are kept").Required().ExistingDirVar(&c.stateDir)
@@ -85,6 +94,10 @@ func Run() {
 
 	admGossip := admin.Commandf("gossip", "View the synchronization traffic").Action(c.gossipAction)
 	admGossip.Flag("json", "Render JSON values").BoolVar(&c.json)
+	admGossip.Flag("context", "The NATS context to use for the connection").StringVar(&c.nCtx)
+	admGossip.Flag("choria-seed", "The seed file to connect to Choria Brokers with").ExistingFileVar(&c.choriaSeed)
+	admGossip.Flag("choria-token", "The JWT token file to connect to Choria Brokers with").ExistingFileVar(&c.choriaToken)
+	admGossip.Flag("choria-collective", "The Choria collective you will be connecting to").Default("choria").StringVar(&c.choriaCollective)
 
 	app.MustParseWithUsage(os.Args[1:])
 }
@@ -139,12 +152,43 @@ func (c *cmd) findState(_ *fisk.ParseContext) error {
 	})
 }
 
+func (c *cmd) connect() (*nats.Conn, error) {
+	var opts []nats.Option
+
+	log := logrus.New().WithFields(logrus.Fields{"context": c.nCtx, "seed": c.choriaSeed, "jwt": c.choriaToken, "collective": c.choriaCollective})
+	if c.debug {
+		log.Logger.SetLevel(logrus.DebugLevel)
+	}
+
+	if c.choriaToken != "" && c.choriaSeed != "" {
+		log.Debugf("Configuring Choria Connection")
+
+		token, err := os.ReadFile(c.choriaToken)
+		if err != nil {
+			return nil, err
+		}
+
+		inbox, jwth, sigh, err := fw.NatsConnectionHelpers(string(token), c.choriaCollective, c.choriaSeed, logrus.NewEntry(logrus.New()))
+		if err != nil {
+			return nil, fmt.Errorf("could not set up choria connection: %w", err)
+		}
+
+		opts = append(opts, nats.Token(string(token)))
+		opts = append(opts, nats.CustomInboxPrefix(inbox))
+		opts = append(opts, nats.UserJWT(jwth, sigh))
+		opts = append(opts, nats.Secure(&tls.Config{InsecureSkipVerify: true}))
+	}
+
+	log.Debugf("Connecting to NATS server")
+	return natscontext.Connect(c.nCtx, opts...)
+}
+
 func (c *cmd) gossipAction(_ *fisk.ParseContext) error {
 	if c.nCtx == "" && natscontext.SelectedContext() == "" {
 		return fmt.Errorf("a NATS context is required when a default context is not selected")
 	}
 
-	nc, err := natscontext.Connect(c.nCtx)
+	nc, err := c.connect()
 	if err != nil {
 		return err
 	}
@@ -182,7 +226,7 @@ func (c *cmd) findAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("a NATS context is required when a default context is not selected")
 	}
 
-	nc, err := natscontext.Connect(c.nCtx)
+	nc, err := c.connect()
 	if err != nil {
 		return err
 	}
