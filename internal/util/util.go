@@ -10,11 +10,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	fw "github.com/choria-io/go-choria/choria"
 	"github.com/choria-io/stream-replicator/backoff"
+	"github.com/choria-io/tokens"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
@@ -92,7 +93,7 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 				return nil, fmt.Errorf("could not set up choria connection: %w", err)
 			}
 
-			inbox, jwth, sigh, err := fw.NatsConnectionHelpers(string(token), choria.Collective(), choria.SeedFile(), log)
+			inbox, jwth, sigh, err := tokens.NatsConnectionHelpers(string(token), choria.Collective(), choria.SeedFile(), log)
 			if err != nil {
 				return nil, fmt.Errorf("could not set up choria connection: %w", err)
 			}
@@ -141,5 +142,55 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 }
 
 func ParseDurationString(dstr string) (dur time.Duration, err error) {
-	return fw.ParseDuration(dstr)
+	dstr = strings.TrimSpace(dstr)
+
+	if len(dstr) <= 0 {
+		return dur, nil
+	}
+
+	ls := len(dstr)
+	di := ls - 1
+	unit := dstr[di:]
+
+	switch unit {
+	case "w", "W":
+		val, err := strconv.ParseFloat(dstr[:di], 32)
+		if err != nil {
+			return dur, err
+		}
+
+		dur = time.Duration(val*7*24) * time.Hour
+
+	case "d", "D":
+		val, err := strconv.ParseFloat(dstr[:di], 32)
+		if err != nil {
+			return dur, err
+		}
+
+		dur = time.Duration(val*24) * time.Hour
+	case "M":
+		val, err := strconv.ParseFloat(dstr[:di], 32)
+		if err != nil {
+			return dur, err
+		}
+
+		dur = time.Duration(val*24*30) * time.Hour
+	case "Y", "y":
+		val, err := strconv.ParseFloat(dstr[:di], 32)
+		if err != nil {
+			return dur, err
+		}
+
+		dur = time.Duration(val*24*365) * time.Hour
+	case "s", "S", "m", "h", "H":
+		dur, err = time.ParseDuration(dstr)
+		if err != nil {
+			return dur, err
+		}
+
+	default:
+		return dur, fmt.Errorf("invalid time unit %s", unit)
+	}
+
+	return dur, nil
 }
