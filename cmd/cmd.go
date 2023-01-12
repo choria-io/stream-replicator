@@ -22,9 +22,9 @@ import (
 	"syscall"
 	"time"
 
-	fw "github.com/choria-io/go-choria/choria"
 	"github.com/choria-io/stream-replicator/advisor"
 	"github.com/choria-io/stream-replicator/idtrack"
+	"github.com/choria-io/tokens"
 	"github.com/nats-io/jsm.go"
 	"github.com/nats-io/jsm.go/natscontext"
 	"github.com/nats-io/nats.go"
@@ -168,7 +168,7 @@ func (c *cmd) connect() (*nats.Conn, error) {
 			return nil, err
 		}
 
-		inbox, jwth, sigh, err := fw.NatsConnectionHelpers(string(token), c.choriaCollective, c.choriaSeed, logrus.NewEntry(logrus.New()))
+		inbox, jwth, sigh, err := tokens.NatsConnectionHelpers(string(token), c.choriaCollective, c.choriaSeed, logrus.NewEntry(logrus.New()))
 		if err != nil {
 			return nil, fmt.Errorf("could not set up choria connection: %w", err)
 		}
