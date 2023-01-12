@@ -67,14 +67,17 @@ Each advisory looks like this:
 The `stream-replicator` command comes with a number of tools to inspect the state and behavior of the system. Most of these
 will only make sense when deployed clustered or when data sampling is enabled.
 
+{{% notice style="tip" %}}
+Some of these commands connect to NATS. You need a configuration context that can be created using `nats context`, this command accept `--context` or will use the selected context.
+
+To connect to Choria Brokers in Organization Issuer mode pass `--choria-jwt` and `--choria-seed` with your Choria tokens. 
+{{% /notice %}}
+
+
 ### Searching Advisories
 
 When sampling the Replicator will publish advisories about node states. If you store these in a stream by ingesting `choria.registration.advisories.>`
 you can search for a specific or just view all data:
-
-{{% notice style="tip" %}}
-You need a configuration context that can be created using `nats context`, this command accept `--context` or will use the selected context
-{{% /notice %}}
 
 ```nohighlight
 $ stream-replicator admin advisories REGISTRATION_ADVISORIES node1.example.net --since 5h
@@ -104,10 +107,6 @@ $ sudo stream-replicator admin state /var/lib/stream-replicator node1.example.ne
 
 When deploying the replicator in a cluster it will sync the state shown above using a gossip protocol, you can observe
 this in real time:
-
-{{% notice style="tip" %}}
-You need a configuration context that can be created using `nats context`, this command accept `--context` or will use the selected context
-{{% /notice %}}
 
 ```nohighlight
 $ stream-replicator admin gossip
