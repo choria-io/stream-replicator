@@ -1,6 +1,6 @@
 module github.com/choria-io/stream-replicator
 
-go 1.18
+go 1.19
 
 require (
 	github.com/choria-io/fisk v0.4.0
