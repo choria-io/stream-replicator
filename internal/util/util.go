@@ -35,6 +35,7 @@ type choriaConn interface {
 func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, choria choriaConn, oldStyle bool, log *logrus.Entry) (nc *nats.Conn, err error) {
 	opts := []nats.Option{
 		nats.MaxReconnects(-1),
+		nats.IgnoreAuthErrorAbort(),
 		nats.NoEcho(),
 		nats.Name(fmt.Sprintf("Choria Stream Replicator: %s", name)),
 		nats.CustomReconnectDelay(func(n int) time.Duration {
