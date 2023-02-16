@@ -65,7 +65,7 @@ fi
 %{bindir}/%{pkgname}
 /etc/logrotate.d/%{pkgname}
 /usr/lib/systemd/system/%{pkgname}.service
-%attr(640, nobody, nobody)/var/log/%{pkgname}.log
+%attr(644, nobody, nobody)/var/log/%{pkgname}.log
 %attr(740, nobody, nobody)/var/lib/%{pkgname}
 
 %changelog
