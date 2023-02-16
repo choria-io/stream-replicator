@@ -274,7 +274,6 @@ func (c *sourceInitiatedCopier) handler(msg *nats.Msg) (*jsm.MsgInfo, error) {
 
 	meta, err := jsm.ParseJSMsgMetadata(msg)
 	if err == nil {
-		lagMessageCount.WithLabelValues(c.cfg.Stream, c.sr.ReplicatorName, c.cfg.Name).Set(float64(meta.Pending()))
 		streamSequence.WithLabelValues(c.cfg.Stream, c.sr.ReplicatorName, c.cfg.Name).Set(float64(meta.StreamSequence()))
 
 		if c.cfg.MaxAgeDuration > 0 && time.Since(meta.TimeStamp()) > c.cfg.MaxAgeDuration {

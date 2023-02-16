@@ -134,7 +134,6 @@ We have extensive Prometheus Metrics about the operation of the system allowing 
 | `choria_stream_replicator_replicator_total_bytess`                    | The size of messages processed including ones that would be ignored                          |
 | `choria_stream_replicator_replicator_handler_error_count`             | The number of times the handler failed to process a message                                  |
 | `choria_stream_replicator_replicator_processing_time_seconds`         | How long it took to process messages                                                         |
-| `choria_stream_replicator_replicator_stream_lag_messages`             | How many messages from the end of the stream the current processing point is                 |
 | `choria_stream_replicator_replicator_stream_sequence`                 | The stream sequence of the last message received from the consumer                           |
 | `choria_stream_replicator_replicator_too_old_messages`                | How many messages were discarded for being too old                                           |
 | `choria_stream_replicator_replicator_copied_messages`                 | How many messages were copied                                                                |

@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/choria-io/fisk v0.4.0
-	github.com/choria-io/tokens v0.0.0-20230214134442-7f04bfd84ca9
+	github.com/choria-io/tokens v0.0.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/nats-io/jsm.go v0.0.35
