@@ -4,8 +4,8 @@ github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj
 github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/choria-io/fisk v0.4.0 h1:V+mh3OpcmE0uBcihUA18dRJeL1J8YUCCLbZZQRa7GMY=
 github.com/choria-io/fisk v0.4.0/go.mod h1:3Rc9XxqKC4y9wBf2GfQ4ovJ1VKELAWcU0J33M/Zgjvs=
-github.com/choria-io/tokens v0.0.0-20230214134442-7f04bfd84ca9 h1:dY6m9l0Jy9tINKtC/G98oKgfEZTQiEjfb2Ivx7CiTsg=
-github.com/choria-io/tokens v0.0.0-20230214134442-7f04bfd84ca9/go.mod h1:N519OY0kktSbUSjQYosYASs/53Zb0jCS/I8hbXpQHKo=
+github.com/choria-io/tokens v0.0.1 h1:uk0R5OF+QNchL+COcUi3Epyi5Su8kMPmg6QjDBKko1M=
+github.com/choria-io/tokens v0.0.1/go.mod h1:N519OY0kktSbUSjQYosYASs/53Zb0jCS/I8hbXpQHKo=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
