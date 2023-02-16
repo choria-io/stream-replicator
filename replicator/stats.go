@@ -29,11 +29,6 @@ var (
 		Help: "How long it took to process messages",
 	}, []string{"stream", "replicator", "worker"})
 
-	lagMessageCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "stream_lag_messages"),
-		Help: "How many messages from the end of the stream the current processing point is",
-	}, []string{"stream", "replicator", "worker"})
-
 	streamSequence = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "replicator", "stream_sequence"),
 		Help: "The stream sequence of the last message received from the consumer",
@@ -85,7 +80,6 @@ func init() {
 	prometheus.MustRegister(receivedMessageSize)
 	prometheus.MustRegister(handlerErrorCount)
 	prometheus.MustRegister(processTime)
-	prometheus.MustRegister(lagMessageCount)
 	prometheus.MustRegister(copiedMessageCount)
 	prometheus.MustRegister(copiedMessageSize)
 	prometheus.MustRegister(skippedMessageCount)

@@ -191,7 +191,6 @@ func (c *targetInitiatedCopier) handler(ctx context.Context, msg *nats.Msg) (*js
 		return nil, fmt.Errorf("message data parse failed: %v", err)
 	}
 
-	lagMessageCount.WithLabelValues(c.cfg.Stream, c.sr.ReplicatorName, c.cfg.Name).Set(float64(meta.Pending()))
 	streamSequence.WithLabelValues(c.cfg.Stream, c.sr.ReplicatorName, c.cfg.Name).Set(float64(meta.StreamSequence()))
 
 	rseq := c.getSourceResumeSeq()
