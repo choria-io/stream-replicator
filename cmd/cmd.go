@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -50,8 +51,11 @@ type cmd struct {
 	findSince        time.Duration
 	findFollow       bool
 	nCtx             string
-	stateDir         string
-	stateValue       string
+	stateSource      string
+	stateValue       *regexp.Regexp
+	stateValuesOnly  bool
+	stateAdvised     bool
+	stateSince       time.Duration
 	json             bool
 	choriaToken      string
 	choriaSeed       string
@@ -89,8 +93,12 @@ func Run() {
 	admFind.Flag("choria-collective", "The Choria collective you will be connecting to").Default("choria").StringVar(&c.choriaCollective)
 
 	admState := admin.Commandf("state", "Search state files").Action(c.findState)
-	admState.Arg("dir", "Directory where state files are kept").Required().ExistingDirVar(&c.stateDir)
-	admState.Arg("value", "The value to search for").Required().StringVar(&c.stateValue)
+	admState.Arg("dir", "Directory where state files are kept").Required().StringVar(&c.stateSource)
+	admState.Flag("since", "List only entries seen since a certain duration ago").DurationVar(&c.stateSince)
+	admState.Flag("advised", "Include entries that are in warning state").Default("true").BoolVar(&c.stateAdvised)
+	admState.Flag("value", "A regular expression value to search for").RegexpVar(&c.stateValue)
+	admState.Flag("values", "List only values rather than full entries").BoolVar(&c.stateValuesOnly)
+	admState.Flag("json", "Render JSON values").BoolVar(&c.json)
 
 	admGossip := admin.Commandf("gossip", "View the synchronization traffic").Action(c.gossipAction)
 	admGossip.Flag("json", "Render JSON values").BoolVar(&c.json)
@@ -102,8 +110,10 @@ func Run() {
 	app.MustParseWithUsage(os.Args[1:])
 }
 
-func (c *cmd) findState(_ *fisk.ParseContext) error {
-	return filepath.WalkDir(c.stateDir, func(path string, d fs.DirEntry, err error) error {
+func (c *cmd) findStateFiles(dir string) ([]string, error) {
+	var paths []string
+
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -116,6 +126,34 @@ func (c *cmd) findState(_ *fisk.ParseContext) error {
 			return nil
 		}
 
+		paths = append(paths, path)
+
+		return nil
+	})
+
+	return paths, err
+}
+
+func (c *cmd) findState(_ *fisk.ParseContext) error {
+	var paths []string
+	var err error
+
+	if stat, err := os.Stat(c.stateSource); err == nil {
+		if !stat.IsDir() {
+			paths = append(paths, c.stateSource)
+		}
+	}
+
+	if len(paths) == 0 {
+		paths, err = c.findStateFiles(c.stateSource)
+		if err != nil {
+			return err
+		}
+	}
+
+	var selected []*idtrack.Item
+
+	for _, path := range paths {
 		items := idtrack.Tracker{}
 		sb, err := os.ReadFile(path)
 		if err != nil {
@@ -126,30 +164,98 @@ func (c *cmd) findState(_ *fisk.ParseContext) error {
 			return err
 		}
 
-		item, ok := items.Items[c.stateValue]
-		if ok {
-			fmt.Printf("%s:\n\n", path)
+		for v, item := range items.Items {
+			item.Value = v
 
-			fmt.Printf("           Value: %v\n", c.stateValue)
-			if item.Seen.IsZero() {
-				fmt.Printf("       Seen Time: never\n")
-			} else {
-				fmt.Printf("       Seen Time: %v (%v)\n", item.Seen, time.Since(item.Seen).Round(time.Second))
+			if c.stateSince > 0 && time.Since(item.Seen) >= c.stateSince {
+				continue
 			}
 
-			if item.Copied.IsZero() {
-				fmt.Printf("     Copied Time: never\n")
-			} else {
-				fmt.Printf("     Copied Time: %v (%v)\n", item.Copied, time.Since(item.Copied).Round(time.Second))
+			if !c.stateAdvised && item.Advised {
+				continue
 			}
-			fmt.Printf("    Payload Size: %v\n", item.Size)
-			fmt.Printf("         Advised: %t\n", item.Advised)
 
-			fmt.Println()
+			if c.stateValue != nil && !c.stateValue.MatchString(item.Value) {
+				continue
+			}
+
+			selected = append(selected, item)
+		}
+	}
+
+	if len(selected) == 0 {
+		if c.stateValuesOnly {
+			return nil
+		}
+		if c.json {
+			fmt.Println("[]")
+			return nil
 		}
 
+		fmt.Println("No items matched")
 		return nil
-	})
+	}
+
+	// just values used later should we need to json dump
+	var values []string
+
+	// avoid duplicate names though in practice one would partition on fqdn so there wouldnt be dupes but worth doing anyway
+	if c.stateValuesOnly {
+		uniq := []*idtrack.Item{}
+		seen := make(map[string]struct{})
+
+		for _, item := range selected {
+			if _, ok := seen[item.Value]; ok {
+				continue
+			}
+
+			uniq = append(uniq, item)
+			values = append(values, item.Value)
+			seen[item.Value] = struct{}{}
+		}
+
+		selected = uniq
+	}
+
+	if c.json {
+		v := any(selected)
+		if c.stateValuesOnly {
+			v = values
+		}
+
+		j, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(j))
+		return nil
+	}
+
+	for _, item := range selected {
+		if c.stateValuesOnly {
+			fmt.Println(item.Value)
+			continue
+		}
+
+		fmt.Printf("           Value: %v\n", item.Value)
+		if item.Seen.IsZero() {
+			fmt.Printf("       Seen Time: never\n")
+		} else {
+			fmt.Printf("       Seen Time: %v (%v)\n", item.Seen, time.Since(item.Seen).Round(time.Second))
+		}
+
+		if item.Copied.IsZero() {
+			fmt.Printf("     Copied Time: never\n")
+		} else {
+			fmt.Printf("     Copied Time: %v (%v)\n", item.Copied, time.Since(item.Copied).Round(time.Second))
+		}
+		fmt.Printf("    Payload Size: %v\n", item.Size)
+		fmt.Printf("         Advised: %t\n", item.Advised)
+
+		fmt.Println()
+	}
+
+	return nil
 }
 
 func (c *cmd) connect() (*nats.Conn, error) {
