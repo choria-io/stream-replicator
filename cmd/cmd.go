@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/choria-io/stream-replicator/advisor"
+	"github.com/choria-io/stream-replicator/heartbeat"
 	"github.com/choria-io/stream-replicator/idtrack"
 	"github.com/choria-io/tokens"
 	"github.com/nats-io/jsm.go"
@@ -447,6 +448,18 @@ func (c *cmd) replicateAction(_ *fisk.ParseContext) error {
 				c.log.Errorf("Could not start replicator for %s: %v", s.Name, err)
 			}
 		}(s)
+	}
+
+	if cfg.HeartBeat != nil {
+		hb, err := heartbeat.New(cfg.HeartBeat, cfg.ReplicatorName, c.log)
+		if err != nil {
+			c.log.Errorf("Could not initialize heartbeat: %v", err)
+		} else {
+			err = hb.Run(ctx, wg)
+			if err != nil {
+				c.log.Errorf("Could not start heartbeat: %v", err)
+			}
+		}
 	}
 
 	wg.Wait()

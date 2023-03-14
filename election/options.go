@@ -56,3 +56,8 @@ func WithDebug(cb func(format string, a ...any)) Option {
 func WithReplicator(r string) Option {
 	return func(o *options) { o.replicator = r }
 }
+
+// SkipTTLValidateForTests turns off Bucket TTL validation for testing
+func SkipTTLValidateForTests() {
+	skipValidate = true
+}
