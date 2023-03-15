@@ -34,6 +34,8 @@ type Config struct {
 	LogFile string `json:"logfile"`
 	// LogLevel is the logging level: debug, warn or info
 	LogLevel string `json:"loglevel"`
+	// Heartbeat defines monitoring heartbeats
+	HeartBeat *HeartBeat `json:"heartbeats"`
 }
 
 type Stream struct {
@@ -106,6 +108,32 @@ type Stream struct {
 	MaxAgeDuration time.Duration `json:"-"`
 	// StateFile where state will be written
 	StateFile string `json:"-"`
+}
+
+type HeartBeat struct {
+	// LeaderElection indicates that this replicator is part of a group and will elect a leader to send hearbeats
+	LeaderElection bool `json:"leader_election"`
+	// Interval determines how often a heartbeat message will be sent
+	Interval string `json:"interval"`
+	// Headers are custom headers to add to the heartbeat message
+	Headers map[string]string `json:"headers"`
+	// Subjects are the subjects the heatbeat messages will be sent to
+	Subjects []Subject `json:"subjects"`
+	// TLS is TLS settings that would be used,
+	TLS TLS `json:"tls"`
+	// Choria is the Choria settings that would be used
+	Choria ChoriaConnection `json:"choria"`
+	// URL is the url of the nats broker
+	URL string `json:"url"`
+}
+
+type Subject struct {
+	// Name is the name of the subject
+	Name string `json:"subject"`
+	// Interval determines how often a heartbeat message will be sent
+	Interval string `json:"interval"`
+	// Headers are custom headers to add to the heartbeat message
+	Headers map[string]string `json:"headers"`
 }
 
 type Advisory struct {
@@ -285,6 +313,32 @@ func (c *Config) Validate() (err error) {
 			}
 			if inspections > 0 {
 				return fmt.Errorf("message inspection and sampling cannot be used with target_initiated")
+			}
+		}
+	}
+
+	if c.HeartBeat != nil {
+		if c.HeartBeat.URL == "" {
+			return fmt.Errorf("url is required with heartbeat")
+		}
+
+		_, err = util.ParseDurationString(c.HeartBeat.Interval)
+		if err != nil {
+			return fmt.Errorf("invalid interval: %v", err)
+		}
+
+		if len(c.HeartBeat.Subjects) == 0 {
+			return fmt.Errorf("heartbeat requires at least one subject")
+		}
+
+		for _, subject := range c.HeartBeat.Subjects {
+			if subject.Name == "" {
+				return fmt.Errorf("name is required with subject")
+			}
+
+			_, err = util.ParseDurationString(subject.Interval)
+			if err != nil {
+				return fmt.Errorf("invalid interval: %v", err)
 			}
 		}
 	}

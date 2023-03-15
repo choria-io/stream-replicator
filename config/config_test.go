@@ -160,5 +160,30 @@ var _ = Describe("Config", func() {
 			Expect(cfg.Validate()).To(MatchError("only one inspection mode can be set per stream"))
 
 		})
+
+		It("Should validate the required fields in heartbeat", func() {
+			cfg.HeartBeat = &HeartBeat{}
+			Expect(cfg.Validate()).To(MatchError("url is required with heartbeat"))
+
+			cfg.HeartBeat.URL = "nats://foo.com:4222"
+			Expect(cfg.Validate()).To(MatchError("heartbeat requires at least one subject"))
+
+			cfg.HeartBeat.Subjects = []Subject{
+				{},
+			}
+			Expect(cfg.Validate()).To(MatchError("name is required with subject"))
+
+			cfg.HeartBeat.Subjects = []Subject{
+				{
+					Name: "s.1",
+				},
+			}
+
+			cfg.HeartBeat.Interval = "1o"
+			Expect(cfg.Validate()).To(MatchError("invalid interval: invalid time unit o"))
+
+			cfg.HeartBeat.Interval = "1s"
+			Expect(cfg.Validate()).ToNot(HaveOccurred())
+		})
 	})
 })
