@@ -27,7 +27,7 @@ import (
 
 func TestHeartBeat(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "heartbeat")
+	RunSpecs(t, "Heartbeats")
 }
 
 var _ = Describe("Subject Heartbeat", func() {
