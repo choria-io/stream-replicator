@@ -7,13 +7,13 @@ package memory
 import (
 	"context"
 	"fmt"
+	"github.com/nats-io/nats.go"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/choria-io/stream-replicator/config"
 	"github.com/choria-io/stream-replicator/idtrack"
-	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )

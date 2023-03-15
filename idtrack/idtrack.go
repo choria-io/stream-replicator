@@ -198,6 +198,10 @@ func (t *Tracker) NotifyExpired(cb func(map[string]Item)) error {
 
 // RecordSeen records that we saw the item
 func (t *Tracker) RecordSeen(v string, sz float64) {
+	if v == _EMPTY_ {
+		return
+	}
+
 	t.Lock()
 	defer t.Unlock()
 
