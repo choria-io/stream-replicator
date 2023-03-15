@@ -140,6 +140,8 @@ func (hb *HeartBeat) Run(ctx context.Context, wg *sync.WaitGroup) error {
 func heartBeatWorker(ctx context.Context, wg *sync.WaitGroup, sub *Subject, nc *nats.Conn, js nats.JetStreamContext, replicatorName string, paused *atomic.Bool, log *logrus.Entry) {
 	defer wg.Done()
 
+	log.Infof("Starting heartbeat with interval: %v", sub.interval)
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Warn("Unable to determine hostname. Publishing heartbeats with empty 'originator' header.")
