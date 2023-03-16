@@ -119,6 +119,70 @@ $ stream-replicator admin gossip
 [CHORIA_REGISTRATION.US_EAST_1_3] size: 6785 advised: false: copied: 29m59.989s xx.example.net
 ```
 
+## End to End latency monitoring
+
+To facilitate monitoring the latency from the point where a message was added to the source stream till it lands in the target one can look at the
+`Choria-SR-Source` header and compare it with the message time in the destination stream.
+
+But what if you have a stream that is not seeing regular traffic? Stream Replicator can publish heartbeats into any subject to cause
+traffic to be produced thus facilitating continues monitoring, even on otherwise idle streams.
+
+{{% notice secondary "Version Hint" code-branch %}}
+This requires version 0.8.0 of Stream Replicator
+{{% /notice %}}
+
+Heartbeats can be published to arbitrary subjects by adding the following configuration.
+
+```yaml
+heartbeats:
+  interval: 10s
+  url: nats://broker.choria.local:4222
+  leader_election: false
+
+  # tls:
+  #   ca: /path/to/ca.pem
+  #   cert: /path/to/cert.pem
+  #   key: /path/to/key.pem
+  
+  choria:
+    seed_file: /etc/stream-replicator/credentials/choria.seed
+    jwt_file: /etc/stream-replicator/credentials/choria.jwt
+    collective: choria
+
+  headers:
+    from: choria_compose
+
+  subjects:
+    - subject: choria.node_metadata._monitor
+    - subject: example._monitor
+      interval: 20s
+      headers:
+        noop: "true"
+```
+
+Here we enable heartbeats to two subjects, the `choria.node_metadata._monitor` subject will get messages every 10 seconds
+with the `from` header added.
+
+The `example._monitor` subject will get messages every 20 seconds and have both the `from` and `noop` headers.
+
+The connection will be to a Choria Broker based on the `choria` configuration, an alternature traditional TLS connection
+is shown in addition.
+
+For high availability one can enable `leader_election` where a specific replicator in a cluster of replicators will be
+elected as the one publishing metrics.
+
+The messages being published will have a unix timestamp as body and headers `Choria-SR-Originator` indicating the host
+that published the heartbeat by hostname and `Choria-SR-Subject` indicating the subject it was published to.
+
+Using `nats` CLI version `0.0.36` and newer can be used to monitor these messages arrive as planned:
+
+```nohighlight
+$ nats server check message --stream CHORIA_REGISTRATION --subject choria.node_metadata._monitor --body-timestamp
+OK Stream Message OK:Valid message on CHORIA_REGISTRATION > choria.node_metadata._monitor | age=8.0830s size=10B
+```
+
+The command has various flags for monitoring the age, see `--help`.
+
 ## Prometheus Data
 
 We have extensive Prometheus Metrics about the operation of the system allowing you to track message counts, size and efficiency of the Sampling feature.
@@ -146,6 +210,11 @@ We have extensive Prometheus Metrics about the operation of the system allowing 
 | `choria_stream_replicator_election_campaigns`                         | The number of campaigns a specific candidate voted in                                        |
 | `choria_stream_replicator_election_leader`                            | Indicates if a specific instance is the current leader                                       |
 | `choria_stream_replicator_election_interval_seconds`                  | The number of seconds between campaigns                                                      |
+| `choria_stream_replicator_heartbeat_subjects_count`                   | The number of subjects being published to                                                    |
+| `choria_stream_replicator_heartbeat_published_count`                  | The number of messags that was published                                                     |
+| `choria_stream_replicator_heartbeat_published_error_count`            | The number of messags that failed to publish                                                 |
+| `choria_stream_replicator_heartbeat_publish_time`                     | Time taken for messages to be published including JetStream ACK time                         |
+| `choria_stream_replicator_heartbeat_paused`                           | Indicates heartbeat publishing is paused due to leader election                              |
 
 We have a [published Grafana dashboard](https://grafana.com/grafana/dashboards/15928) that you can install in your site, a screenshot of the dashboard is below.
 
