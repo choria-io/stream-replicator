@@ -1,0 +1,168 @@
+name: build_tasks
+description: Choria Build Tasks
+
+commands:
+    - name: dependencies
+      type: parent
+      description: Manage dependencies
+      aliases: [d]
+      commands:
+        - name: update
+          description: Update dependencies
+          type: exec
+          aliases: [up]
+          flags:
+            - name: verbose
+              description: Log verbosely
+              bool: true
+            - name: proxy
+              description: Enable using go proxy
+              bool: true
+              default: "true"
+          banner: |
+              >>>
+              >>> Updating all dependencies
+              >>>
+          script: |
+            {{ if eq .Flags.proxy false }}
+            export GOPROXY=direct
+            echo ">>>"
+            echo ">>> Disabling go mod proxy"
+            echo ">>>"
+            echo
+            {{ end }}
+
+            go get -u -n -a -t {{- if .Flags.verbose }} -d -x {{ end }} ./...
+
+            echo ">>> Running go mod tidy"
+            go mod tidy
+
+    - name: test
+      type: parent
+      aliases: [t]
+      description: Perform various tests
+      commands:
+        - name: unit
+          type: exec
+          description: Run ginkgo unit tests
+          aliases: [u]
+          arguments:
+            - name: dir
+              description: Directory to test
+              default: .
+          flags:
+            - name: update
+              description: Updates the ginkgo runtime
+              bool: true
+          script: |
+            set -e
+
+            {{ if .Flags.update }}
+                  echo ">>> Updating ginkgo binary"
+                  go install github.com/onsi/ginkgo/v2/ginkgo
+            {{ end }}
+
+            ginkgo -r --skip Integration {{ .Arguments.dir | escape }}
+
+    - name: docs
+      type: parent
+      description: Documentation related commands
+      commands:
+        - name: serve
+          description: Serves documentation locally
+          type: exec
+          flags:
+            - name: port
+              description: The port to listen on
+              default: "8081"
+          command: hugo serve -p {{ .Flags.port }} -s docs
+
+    - name: build
+      type: parent
+      aliases: [b]
+      description: Code build steps
+      commands:
+        - name: binary
+          description: Build a basic test binary
+          type: exec
+          aliases: [bin]
+          banner: |
+              >>>
+              >>> Building 'go-choria' locally
+              >>>
+              >>>               Target: {{ if .Flags.target }}{{ .Flags.target }}{{else}}host{{end}}
+              >>>
+          flags:
+            - name: target
+              description: Target platform to build for
+              enum: ["linux/amd64"]
+              short: T
+            - name: verbose
+              description: Logs packages being build
+              bool: true
+              short: v
+          script: |
+            set -e
+
+            {{ if eq .Flags.target "linux/amd64" }}
+                export GOOS=linux
+                export GOARCH=amd64
+            {{ end }}
+
+            {{ if .Flags.verbose }}
+            echo ">>> Packages being build"
+            {{ end }}
+
+            go build \
+              {{ if .Flags.verbose }}-v{{ end }} \
+              -ldflags="-s -w \
+                -X 'github.com/choria-io/stream-replicator/cmd.version=0.0.$(date +%s)' \
+                " -o stream-replicator
+
+            echo
+            ls -l stream-replicator
+            echo
+            file stream-replicator
+            echo
+
+        - name: nightly-docker
+          description: Builds nightly docker container
+          type: exec
+          aliases: [nd]
+          flags:
+            - name: repo
+              description: YUM Repository to use
+              default: https://yum.eu.choria.io/nightly/el/nightly.repo
+            - name: push
+              description: Push the built images
+              default: false
+              bool: true
+          banner: |
+            >>>
+            >>> Building nightly docker container using {{ .Flags.repo }}
+            >>>
+          script: |
+            set -e
+
+            docker pull almalinux:8
+
+            DATE=$(date +%Y%m%d)
+
+            docker build \
+              --no-cache \
+              --build-arg REPO={{ .Flags.repo | escape }} \
+              --tag "choria/stream-replicator:nightly-${DATE}" \
+              --tag "choria/stream-replicator:nightly" \
+              .
+
+            {{ if .Flags.push }}
+              echo
+              echo ">>> Pushing built containers"
+              echo
+              docker push choria/stream-replicator:nightly
+              docker push "choria/stream-replicator:nightly-${DATE}"
+            {{ else }}
+              echo
+              echo ">>> Skipping container push"
+              echo
+            {{ end }}
