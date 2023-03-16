@@ -10,7 +10,7 @@ task :build do
   buildid = SecureRandom.hex
   packages = (ENV["PACKAGES"] || "").split(",")
   packages = ["el7_64", "el8_64"] if packages.empty?
-  builder = "choria/packager:el8-go1.19"
+  builder = "registry.choria.io/choria/packager:el8-go1.19"
   source = "/go/src/github.com/choria-io/stream-replicator"
 
   packages.each do |pkg|
