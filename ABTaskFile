@@ -153,14 +153,69 @@ commands:
               --build-arg REPO={{ .Flags.repo | escape }} \
               --tag "choria/stream-replicator:nightly-${DATE}" \
               --tag "choria/stream-replicator:nightly" \
+              --tag "registry.choria.io/choria-nightly/stream-replicator:nightly-${DATE}" \
+              --tag "registry.choria.io/choria-nightly/stream-replicator:nightly" \
               .
 
             {{ if .Flags.push }}
               echo
               echo ">>> Pushing built containers"
               echo
-              docker push choria/stream-replicator:nightly
+              docker push "choria/stream-replicator:nightly"
               docker push "choria/stream-replicator:nightly-${DATE}"
+              docker push "registry.choria.io/choria-nightly/stream-replicator:nightly-${DATE}"
+              docker push "registry.choria.io/choria-nightly/stream-replicator:nightly"
+            {{ else }}
+              echo
+              echo ">>> Skipping container push"
+              echo
+            {{ end }}
+
+        - name: release-docker
+          description: Builds release docker container
+          type: exec
+          aliases: [rd]
+          flags:
+            - name: repo
+              description: YUM Repository to use
+              default: https://yum.eu.choria.io/release/el/release.repo
+            - name: push
+              description: Push the built images
+              default: false
+              bool: true
+          banner: |
+            >>>
+            >>> Building release docker container using {{ .Flags.repo }}
+            >>>
+          script: |
+            set -e
+
+            TAG=$(git tag --points-at HEAD|sed -e s/^v//)
+            if [ -z "${TAG}" ]
+            then
+              echo "!!! HEAD is not a tag"
+              exit 1
+            fi
+
+            docker pull almalinux:8
+
+            docker build \
+              --no-cache \
+              --build-arg REPO={{ .Flags.repo | escape }} \
+              --tag "choria/stream-replicator:${TAG}" \
+              --tag "choria/stream-replicator:latest" \
+              --tag "registry.choria.io/choria/stream-replicator:${TAG}" \
+              --tag "registry.choria.io/choria/stream-replicator:latest" \
+              .
+
+            {{ if .Flags.push }}
+              echo
+              echo ">>> Pushing built containers"
+              echo
+              docker push "choria/stream-replicator:${TAG}"
+              docker push "choria/stream-replicator:latest"
+              docker push "registry.choria.io/choria/stream-replicator:${TAG}"
+              docker push "registry.choria.io/choria/stream-replicator:latest"
             {{ else }}
               echo
               echo ">>> Skipping container push"
