@@ -1,5 +1,7 @@
 FROM almalinux:8
 
+ARG DATE="unknown"
+
 WORKDIR /
 ENTRYPOINT ["/usr/sbin/stream-replicator"]
 
