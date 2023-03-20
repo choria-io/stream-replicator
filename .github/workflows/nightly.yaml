@@ -35,6 +35,21 @@ jobs:
           packager_tag: el8-go1.19
           version: nightly
 
+  docker:
+    needs:
+      - upload
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and Publish Docker Container
+        uses: choria-io/actions/nightly@main
+        with:
+          package: stream-replicator
+          repo: stream-replicator
+          dockerfile: Dockerfile-nightly
+          registry_username: "${{ secrets.REGISTRY_USERNAME }}"
+          registry_password: "${{ secrets.REGISTRY_PASSWORD }}"
+
   upload:
     needs:
       - el7_64
