@@ -13,7 +13,7 @@ var (
 	hbSubjects = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "heartbeat", "subjects_count"),
 		Help: "Number of subjects that heartbeats are being published for",
-	}, []string{"replicator", "subject"})
+	}, []string{"replicator"})
 	hbPublishedCtr = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "heartbeat", "published_count"),
 		Help: "Number of published messages",
@@ -29,7 +29,7 @@ var (
 	hbPaused = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName("choria_stream_replicator", "heartbeat", "paused"),
 		Help: "Paused under leader election",
-	}, []string{"replicator"})
+	}, []string{"replicator", "hostname"})
 )
 
 func init() {

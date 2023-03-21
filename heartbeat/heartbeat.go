@@ -32,6 +32,7 @@ const (
 
 var (
 	enableBackoff = true
+	stubHostname  string // Facilitates testing
 )
 
 type HeartBeat struct {
@@ -46,6 +47,7 @@ type HeartBeat struct {
 	subjects       []*Subject
 	log            *logrus.Entry
 	paused         atomic.Bool
+	hostname       string
 }
 
 type Subject struct {
@@ -56,9 +58,10 @@ type Subject struct {
 
 // New creates a new instance of the Heartbeat struct
 func New(hbcfg *config.HeartBeat, replicatorName string, log *logrus.Entry) (*HeartBeat, error) {
+	var err error
 	hb := &HeartBeat{
 		replicatorName: replicatorName,
-		electionName:   fmt.Sprintf("%s_HB", replicatorName),
+		electionName:   fmt.Sprintf("SR_%s_HB", replicatorName),
 		tls:            hbcfg.TLS,
 		choria:         hbcfg.Choria,
 		leaderElection: hbcfg.LeaderElection,
@@ -71,11 +74,19 @@ func New(hbcfg *config.HeartBeat, replicatorName string, log *logrus.Entry) (*He
 		hb.headers = make(map[string]string)
 	}
 
-	hb.paused.Store(hb.leaderElection)
-
 	hb.interval = DefaultUpdateInterval
 	if hbcfg.Interval != "" {
 		hb.interval = hbcfg.Interval
+	}
+
+	hb.hostname, err = hb.getHostName()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create heartbeat: %v", err)
+	}
+
+	if hb.leaderElection {
+		hb.paused.Store(true)
+		hbPaused.WithLabelValues(hb.replicatorName, hb.hostname).Set(1)
 	}
 
 	for _, s := range hbcfg.Subjects {
@@ -130,32 +141,24 @@ func (hb *HeartBeat) Run(ctx context.Context, wg *sync.WaitGroup) error {
 
 	for _, subject := range hb.subjects {
 		wg.Add(1)
-		hbSubjects.WithLabelValues(hb.replicatorName, subject.name).Inc()
-		go heartBeatWorker(ctx, wg, subject, nc, js, hb.replicatorName, &hb.paused, hb.log.WithField("subject", subject.name))
+		hbSubjects.WithLabelValues(hb.replicatorName).Inc()
+		go heartBeatWorker(ctx, wg, subject, nc, js, hb.replicatorName, hb.hostname, &hb.paused, hb.log.WithField("subject", subject.name))
 	}
 
 	return nil
 }
 
-func heartBeatWorker(ctx context.Context, wg *sync.WaitGroup, sub *Subject, nc *nats.Conn, js nats.JetStreamContext, replicatorName string, paused *atomic.Bool, log *logrus.Entry) {
+func heartBeatWorker(ctx context.Context, wg *sync.WaitGroup, sub *Subject, nc *nats.Conn, js nats.JetStreamContext, replicatorName, hostname string, paused *atomic.Bool, log *logrus.Entry) {
 	defer wg.Done()
 
 	log.Infof("Starting heartbeat with interval: %v", sub.interval)
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Warn("Unable to determine hostname. Publishing heartbeats with empty 'originator' header.")
-	}
 
 	msg := nats.NewMsg(sub.name)
 	for k, v := range sub.headers {
 		msg.Header.Add(k, v)
 	}
 
-	if hostname != "" {
-		msg.Header.Add(OriginatorHeader, hostname)
-	}
-
+	msg.Header.Add(OriginatorHeader, hostname)
 	msg.Header.Add(SubjectHeader, sub.name)
 
 	ticker := time.NewTicker(sub.interval)
@@ -205,24 +208,40 @@ func (hb *HeartBeat) setupElection(ctx context.Context, nc *nats.Conn) error {
 	}
 
 	win := func() {
-		hb.log.Warnf("%s became the leader", hb.replicatorName)
+		hb.log.Warnf("%s became the leader", hb.hostname)
 		hb.paused.Store(false)
-		hbPaused.WithLabelValues(hb.replicatorName).Set(1.0)
+		hbPaused.WithLabelValues(hb.replicatorName, hb.hostname).Set(0)
 	}
 
 	lost := func() {
-		hb.log.Warnf("%s lost the leadership", hb.replicatorName)
+		hb.log.Warnf("%s lost the leadership", hb.hostname)
 		hb.paused.Store(true)
-		hbPaused.WithLabelValues(hb.replicatorName).Set(0)
+		hbPaused.WithLabelValues(hb.replicatorName, hb.hostname).Set(1.0)
 	}
 
-	e, err := election.NewElection(hb.electionName, "heartbeat", kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
+	e, err := election.NewElection(hb.hostname, hb.electionName, kv, election.WithBackoff(backoff.FiveSec), election.OnWon(win), election.OnLost(lost))
 	if err != nil {
 		return err
 	}
 
 	go e.Start(ctx)
 
-	hb.log.Infof("Set up leader election 'heartbeat' using candidate name %s", hb.electionName)
+	hb.log.Infof("Set up leader election 'heartbeat' using candidate name %s", hb.hostname)
 	return nil
+}
+
+// Facilitates testing
+func (hb *HeartBeat) getHostName() (string, error) {
+	if stubHostname != "" {
+		// Reset the stub value so that we don't leak hostnames between tests
+		rval := stubHostname
+		stubHostname = ""
+		return rval, nil
+	} else {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return "", err
+		}
+		return hostname, nil
+	}
 }
