@@ -237,11 +237,7 @@ func (hb *HeartBeat) getHostName() (string, error) {
 		rval := stubHostname
 		stubHostname = ""
 		return rval, nil
-	} else {
-		hostname, err := os.Hostname()
-		if err != nil {
-			return "", err
-		}
-		return hostname, nil
 	}
+
+	return os.Hostname()
 }

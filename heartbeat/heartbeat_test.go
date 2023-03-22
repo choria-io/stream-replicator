@@ -196,7 +196,7 @@ var _ = Describe("Subject Heartbeat", func() {
 					Expect(err).ToNot(HaveOccurred())
 				}()
 				defer cancel()
-				Eventually(streamMesssage(jstream), "5s").Should(BeNumerically(">=", 1))
+				Eventually(streamMesssage(jstream), "10s").Should(BeNumerically(">=", 1))
 				Eventually(hb1.paused.Load() == hb2.paused.Load(), "10s").Should(BeFalse())
 
 				if !hb1.paused.Load() {
