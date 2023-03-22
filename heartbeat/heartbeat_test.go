@@ -6,7 +6,6 @@ package heartbeat
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -125,7 +124,6 @@ var _ = Describe("Subject Heartbeat", func() {
 				jstream, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
 				Expect(err).ToNot(HaveOccurred())
 				hbConfig.URL = nc.ConnectedUrl()
-				hostname, _ := os.Hostname()
 				hbConfig.Headers = map[string]string{
 					"test1": "value1",
 				}
@@ -133,6 +131,7 @@ var _ = Describe("Subject Heartbeat", func() {
 					"test2": "value2",
 				}
 
+				stubHostname = "test_host"
 				hb, err := New(&hbConfig, "test_replicator", log)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -151,14 +150,13 @@ var _ = Describe("Subject Heartbeat", func() {
 				msgs, err := sub.Fetch(1)
 				Expect(err).ToNot(HaveOccurred())
 
-				log.Errorf("Body is: %s", msgs[0].Data)
 				timestamp, err := strconv.ParseInt(string(msgs[0].Data), 10, 64)
 				Expect(err).ToNot(HaveOccurred())
 				tm := time.Unix(timestamp, 0)
 
 				Expect(tm).To(BeTemporally("~", time.Now().Add(-1*time.Second), 1*time.Second))
 				Expect(msgs[0].Subject).To(Equal("heartbeat"))
-				Expect(msgs[0].Header.Get(OriginatorHeader)).To(Equal(hostname))
+				Expect(msgs[0].Header.Get(OriginatorHeader)).To(Equal("test_host"))
 				Expect(msgs[0].Header.Get(SubjectHeader)).To(Equal("heartbeat"))
 				Expect(msgs[0].Header.Get("test1")).To(Equal("value1"))
 				Expect(msgs[0].Header.Get("test2")).To(Equal("value2"))
@@ -182,10 +180,12 @@ var _ = Describe("Subject Heartbeat", func() {
 				hbConfig.LeaderElection = true
 				hbConfig.URL = nc.ConnectedUrl()
 
-				hb1, err := New(&hbConfig, "test_replicator1_HB", log)
+				stubHostname = "host1"
+				hb1, err := New(&hbConfig, "leader_election_replicator", log)
 				Expect(err).ToNot(HaveOccurred())
 
-				hb2, err := New(&hbConfig, "test_replicator2_HB", log)
+				stubHostname = "host2"
+				hb2, err := New(&hbConfig, "leader_election_replicator", log)
 				Expect(err).ToNot(HaveOccurred())
 
 				go func() {
@@ -196,20 +196,20 @@ var _ = Describe("Subject Heartbeat", func() {
 					Expect(err).ToNot(HaveOccurred())
 				}()
 				defer cancel()
-				Eventually(streamMesssage(jstream), "6s").Should(BeNumerically(">=", 1))
-				Expect(hb1.paused.Load() != hb2.paused.Load()).To(BeTrue())
+				Eventually(streamMesssage(jstream), "5s").Should(BeNumerically(">=", 1))
+				Eventually(hb1.paused.Load() == hb2.paused.Load(), "10s").Should(BeFalse())
 
-				activeReplicator := "test_replicator1_HB"
-				inactiveReplicator := "test_replicator2_HB"
-				if hb1.paused.Load() == true {
-					activeReplicator = "test_replicator2_HB"
-					inactiveReplicator = "test_replicator1_HB"
+				if !hb1.paused.Load() {
+					Expect(getPromGaugeValue(hbPaused, "leader_election_replicator", "host1")).To(Equal(0.0))
+					Expect(getPromGaugeValue(hbPaused, "leader_election_replicator", "host2")).To(Equal(1.0))
+				} else {
+					Expect(getPromGaugeValue(hbPaused, "leader_election_replicator", "host1")).To(Equal(1.0))
+					Expect(getPromGaugeValue(hbPaused, "leader_election_replicator", "host2")).To(Equal(0.0))
 				}
-				Expect(getPromGaugeValue(hbSubjects, activeReplicator, "heartbeat")).To(Equal(1.0))
-				Expect(getPromCountValue(hbPublishedCtr, activeReplicator, "heartbeat")).To(BeNumerically(">=", 1.0))
-				Expect(getPromCountValue(hbPublishedCtrErr, activeReplicator, "heartbeat")).To(Equal(0.0))
-				Expect(getPromGaugeValue(hbPaused, inactiveReplicator)).To(Equal(0.0))
-				Expect(getPromGaugeValue(hbPaused, activeReplicator)).To(Equal(1.0))
+
+				Expect(getPromGaugeValue(hbSubjects, "leader_election_replicator")).To(BeNumerically(">=", 1.0))
+				Expect(getPromCountValue(hbPublishedCtr, "leader_election_replicator", "heartbeat")).To(BeNumerically(">=", 1.0))
+				Expect(getPromCountValue(hbPublishedCtrErr, "leader_election_replicator", "heartbeat")).To(Equal(0.0))
 			})
 		})
 	})
