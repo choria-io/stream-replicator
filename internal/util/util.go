@@ -114,13 +114,37 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 	}
 
 	var urls []string
+	var hasCreds bool
 	for _, u := range strings.Split(srv, ",") {
-		url, err := url.Parse(strings.TrimSpace(u))
+		parsed, err := url.Parse(strings.TrimSpace(u))
 		if err != nil {
 			return nil, err
 		}
 
-		urls = append(urls, url.Redacted())
+		if !hasCreds && parsed.RawQuery != "" {
+			queries, err := url.ParseQuery(parsed.RawQuery)
+			if err != nil {
+				return nil, err
+			}
+
+			if queries.Has("credentials") {
+				creds := queries.Get("credentials")
+				log.Debugf("Using %q as credentials file", creds)
+				opts = append(opts, nats.UserCredentials(creds))
+				hasCreds = true
+			}
+
+			if queries.Has("jwt") && queries.Has("nkey") {
+				jwt := queries.Get("jwt")
+				nkey := queries.Get("nkey")
+				log.Debugf("Using %q as jwt file and %q as nkey file", jwt, nkey)
+				opts = append(opts, nats.UserCredentials(jwt, nkey))
+				hasCreds = true
+			}
+			parsed.RawQuery = ""
+		}
+
+		urls = append(urls, parsed.Redacted())
 	}
 
 	err = backoff.TwoMinutesSlowStart.For(ctx, func(try int) error {
