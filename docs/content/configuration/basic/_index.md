@@ -46,6 +46,16 @@ Loglevels can be `debug`, `info` (default) or `warn` and if `monitor_port` is no
 
 The remaining settings is obvious and match what is in the RPM packages.
 
+## NATS Credentials
+
+We support using NATS credentials, JWT and NKey files for authentication by adding parameters to any nats source or target urls:
+
+| Description           | Example                                                           |
+|-----------------------|-------------------------------------------------------------------|
+| Username and password | `nats://user:pass@example.net:4222`                               |
+| Credentials file      | `nats://example.net:4222?credentials=/path/to/creds`              |
+| JWT and NKey files    | `nats://example.net:4222?jwt=/path/to/my.jwt&nkey=/path/to/my.nk` |
+
 ## TLS
 
 TLS is supported, one can have per Target or Source settings.  Per Stream settings or per Replicator settings.  The most specific will be used for example, given this partial configuration file:
