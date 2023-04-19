@@ -66,7 +66,9 @@ var _ = Describe("Leader Election", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = NewElection("test", "test.key", kv)
+			election, err := NewElection("test", "test.key", kv)
+			Expect(err).ToNot(HaveOccurred())
+			err = election.Start(context.Background())
 			Expect(err).To(MatchError("bucket TTL should be less than or equal to 1 hour"))
 		})
 
