@@ -93,6 +93,9 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 	if stream.TargetStream == _EMPTY_ {
 		stream.TargetStream = stream.Stream
 	}
+	if stream.TargetInitiated && stream.NoTargetCreate {
+		return nil, fmt.Errorf("target initiated streams requires no_target_create to not be set")
+	}
 
 	name := "stream_replicator"
 	if stream.Name != _EMPTY_ {
@@ -344,6 +347,10 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 	s.dest, err = s.setupConnection(ctx, s.cfg.TargetURL, s.cfg.TargetTLS, s.cfg.TargetChoriaConn, log)
 	if err != nil {
 		return fmt.Errorf("source connection failed: %v", err)
+	}
+
+	if s.cfg.NoTargetCreate {
+		return nil
 	}
 
 	return backoff.TwentySec.For(ctx, func(try int) error {

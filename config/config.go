@@ -53,6 +53,8 @@ type Stream struct {
 	TargetRemoveString string `json:"target_subject_remove"`
 	// SourceURL is the NATS server to source messages from in nats://user:pass@server form
 	SourceURL string `json:"source_url"`
+	// NoTargetCreate in source initiated replication will prevent target stream creation or checks at start
+	NoTargetCreate bool `json:"no_target_create"`
 	// TargetURL is the NATS server to send messages to in nats://user:pass@server form
 	TargetURL string `json:"target_url"`
 	// TargetInitiated indicates that the replicator is running nearest to the target and so will use a latency optimized approach
