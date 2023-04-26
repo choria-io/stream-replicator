@@ -3,7 +3,7 @@ module github.com/choria-io/stream-replicator
 go 1.20
 
 require (
-	github.com/choria-io/fisk v0.4.0
+	github.com/choria-io/fisk v0.5.0
 	github.com/choria-io/tokens v0.0.2
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/mock v1.6.0
@@ -28,7 +28,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/pprof v0.0.0-20230406165453-00490a63f317 // indirect
+	github.com/google/pprof v0.0.0-20230426061923-93006964c1fc // indirect
 	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
