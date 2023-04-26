@@ -25,7 +25,7 @@ func (l *logger) Noticef(format string, v ...any) {
 	l.Infof(format, v...)
 }
 
-func WithJetStream(log *logrus.Entry, cb func(nc *nats.Conn, mgr *jsm.Manager)) {
+func WithJetStream(log *logrus.Entry, cb func(srv *server.Server, nc *nats.Conn, mgr *jsm.Manager)) {
 	d, err := os.MkdirTemp("", "jstest")
 	Expect(err).ToNot(HaveOccurred())
 	defer os.RemoveAll(d)
@@ -34,6 +34,7 @@ func WithJetStream(log *logrus.Entry, cb func(nc *nats.Conn, mgr *jsm.Manager)) 
 		JetStream: true,
 		StoreDir:  d,
 		Port:      -1,
+		HTTPPort:  -1,
 		Host:      "localhost",
 		LogFile:   "/dev/stdout",
 	}
@@ -61,5 +62,5 @@ func WithJetStream(log *logrus.Entry, cb func(nc *nats.Conn, mgr *jsm.Manager)) 
 	mgr, err := jsm.New(nc, jsm.WithTimeout(time.Second))
 	Expect(err).ToNot(HaveOccurred())
 
-	cb(nc, mgr)
+	cb(s, nc, mgr)
 }

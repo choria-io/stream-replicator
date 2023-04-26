@@ -13,6 +13,7 @@ import (
 
 	"github.com/choria-io/stream-replicator/internal/util"
 	"github.com/ghodss/yaml"
+	"github.com/nats-io/nats.go"
 )
 
 type Config struct {
@@ -53,10 +54,14 @@ type Stream struct {
 	TargetRemoveString string `json:"target_subject_remove"`
 	// SourceURL is the NATS server to source messages from in nats://user:pass@server form
 	SourceURL string `json:"source_url"`
+	// SourceProcess configures a in-process connection for the source
+	SourceProcess nats.InProcessConnProvider `json:"-"`
 	// NoTargetCreate in source initiated replication will prevent target stream creation or checks at start
 	NoTargetCreate bool `json:"no_target_create"`
 	// TargetURL is the NATS server to send messages to in nats://user:pass@server form
 	TargetURL string `json:"target_url"`
+	// TargetProcess configures a in-process connection for the source
+	TargetProcess nats.InProcessConnProvider `json:"-"`
 	// TargetInitiated indicates that the replicator is running nearest to the target and so will use a latency optimized approach
 	TargetInitiated bool `json:"target_initiated"`
 	// StartSequence is an optional initial sequence to replicate from
@@ -125,6 +130,8 @@ type HeartBeat struct {
 	TLS TLS `json:"tls"`
 	// Choria is the Choria settings that would be used
 	Choria ChoriaConnection `json:"choria"`
+	// Process sets a in-process connection for the heartbeats
+	Process nats.InProcessConnProvider
 	// URL is the url of the nats broker
 	URL string `json:"url"`
 }

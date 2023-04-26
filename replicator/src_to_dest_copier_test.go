@@ -14,6 +14,7 @@ import (
 	"github.com/choria-io/stream-replicator/config"
 	"github.com/choria-io/stream-replicator/internal/testutil"
 	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -119,8 +120,35 @@ var _ = Describe("Source to Destination Copier", func() {
 	})
 
 	Describe("copyMessages", func() {
+		It("Should support in-process connections", func() {
+			testutil.WithJetStream(log, func(srv *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
+				_, tcs := prepareStreams(nc, mgr, 1000)
+
+				sr, scfg := config(nc.ConnectedUrl())
+				scfg.SourceProcess = srv
+				stream, err := NewStream(scfg, sr, log)
+				Expect(err).ToNot(HaveOccurred())
+
+				go func() {
+					defer GinkgoRecover()
+					wg.Add(1)
+					Expect(stream.Run(ctx, &wg)).ToNot(HaveOccurred())
+				}()
+				defer cancel()
+
+				Eventually(streamMesssage(tcs)).Should(BeNumerically(">=", 1000))
+
+				conns, err := srv.Connz(nil)
+				Expect(err).ToNot(HaveOccurred())
+				conn := conns.Conns[1]
+				if conn.IP != "" || conn.Port != 0 {
+					Fail("Connection was not done in-process")
+				}
+			})
+		})
+
 		It("Should copy all data without inspection", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				_, tcs := prepareStreams(nc, mgr, 1000)
 
 				sr, scfg := config(nc.ConnectedUrl())
@@ -144,7 +172,7 @@ var _ = Describe("Source to Destination Copier", func() {
 		})
 
 		It("Should copy all data when no inspection data is found", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				_, tcs := prepareStreams(nc, mgr, 1000)
 
 				sr, scfg := config(nc.ConnectedUrl())
@@ -167,7 +195,7 @@ var _ = Describe("Source to Destination Copier", func() {
 		})
 
 		It("Should support skipping old messages", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 
 				sr, scfg := config(nc.ConnectedUrl())
@@ -198,7 +226,7 @@ var _ = Describe("Source to Destination Copier", func() {
 		})
 
 		It("Should limit correctly", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 
 				sr, scfg := config(nc.ConnectedUrl())
@@ -226,7 +254,7 @@ var _ = Describe("Source to Destination Copier", func() {
 		})
 
 		It("Should recover from consumer loss", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 
 				sr, scfg := config(nc.ConnectedUrl())
@@ -254,7 +282,7 @@ var _ = Describe("Source to Destination Copier", func() {
 		})
 
 		It("Should support leader election", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				js, err := nc.JetStream()
 				Expect(err).ToNot(HaveOccurred())
 				_, err = js.CreateKeyValue(&nats.KeyValueConfig{Bucket: "CHORIA_LEADER_ELECTION", TTL: 2 * time.Second})

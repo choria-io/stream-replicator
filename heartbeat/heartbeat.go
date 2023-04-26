@@ -47,6 +47,7 @@ type HeartBeat struct {
 	subjects       []*Subject
 	log            *logrus.Entry
 	paused         atomic.Bool
+	inproc         nats.InProcessConnProvider
 	hostname       string
 }
 
@@ -66,6 +67,7 @@ func New(hbcfg *config.HeartBeat, replicatorName string, log *logrus.Entry) (*He
 		choria:         hbcfg.Choria,
 		leaderElection: hbcfg.LeaderElection,
 		headers:        hbcfg.Headers,
+		inproc:         hbcfg.Process,
 		log:            log,
 		url:            hbcfg.URL,
 	}
@@ -121,7 +123,7 @@ func New(hbcfg *config.HeartBeat, replicatorName string, log *logrus.Entry) (*He
 // Run initializes a the jetstream connection and spawns a go routine for every configured subject
 // that will publish a heartbeat message on the defined interval
 func (hb *HeartBeat) Run(ctx context.Context, wg *sync.WaitGroup) error {
-	nc, err := util.ConnectNats(ctx, "subject-heartbeats", hb.url, &hb.tls, &hb.choria, false, hb.log)
+	nc, err := util.ConnectNats(ctx, "subject-heartbeats", hb.url, &hb.tls, &hb.choria, false, hb.inproc, hb.log)
 	if err != nil {
 		return err
 	}
