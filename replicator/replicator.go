@@ -285,13 +285,13 @@ func (s *Stream) connect(ctx context.Context) error {
 }
 
 func (s *Stream) connectAdvisories(ctx context.Context) (nc *nats.Conn, err error) {
-	return util.ConnectNats(ctx, "stream-replicator-advisories", s.cfg.SourceURL, s.cfg.SourceTLS, s.cfg.SourceChoriaConn, false, s.log.WithField("connection", "advisories"))
+	return util.ConnectNats(ctx, "stream-replicator-advisories", s.cfg.SourceURL, s.cfg.SourceTLS, s.cfg.SourceChoriaConn, false, s.cfg.SourceProcess, s.log.WithField("connection", "advisories"))
 }
 
 func (s *Stream) connectSource(ctx context.Context) (err error) {
 	log := s.log.WithField("connection", "source")
 
-	s.source, err = s.setupConnection(ctx, s.cfg.SourceURL, s.cfg.SourceTLS, s.cfg.SourceChoriaConn, log)
+	s.source, err = s.setupConnection(ctx, s.cfg.SourceURL, s.cfg.SourceTLS, s.cfg.SourceChoriaConn, s.cfg.SourceProcess, log)
 	if err != nil {
 		return fmt.Errorf("source connection failed: %v", err)
 	}
@@ -344,7 +344,7 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 
 	log := s.log.WithField("connection", "target")
 
-	s.dest, err = s.setupConnection(ctx, s.cfg.TargetURL, s.cfg.TargetTLS, s.cfg.TargetChoriaConn, log)
+	s.dest, err = s.setupConnection(ctx, s.cfg.TargetURL, s.cfg.TargetTLS, s.cfg.TargetChoriaConn, s.cfg.TargetProcess, log)
 	if err != nil {
 		return fmt.Errorf("source connection failed: %v", err)
 	}
@@ -364,11 +364,11 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 	})
 }
 
-func (s *Stream) setupConnection(ctx context.Context, url string, tls *config.TLS, choria *config.ChoriaConnection, log *logrus.Entry) (*Target, error) {
+func (s *Stream) setupConnection(ctx context.Context, url string, tls *config.TLS, choria *config.ChoriaConnection, inproc nats.InProcessConnProvider, log *logrus.Entry) (*Target, error) {
 	t := &Target{mu: &sync.Mutex{}}
 	var err error
 
-	t.nc, err = util.ConnectNats(ctx, s.cfg.Stream, url, tls, choria, true, log)
+	t.nc, err = util.ConnectNats(ctx, s.cfg.Stream, url, tls, choria, true, inproc, log)
 	if err != nil {
 		return nil, err
 	}

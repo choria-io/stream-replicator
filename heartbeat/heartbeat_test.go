@@ -15,6 +15,7 @@ import (
 	"github.com/choria-io/stream-replicator/election"
 	"github.com/choria-io/stream-replicator/internal/testutil"
 	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -75,7 +76,7 @@ var _ = Describe("Subject Heartbeat", func() {
 
 	Describe("run", func() {
 		It("should send at least 1 heart beat message", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				jstream, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
 				Expect(err).ToNot(HaveOccurred())
 				hbConfig.URL = nc.ConnectedUrl()
@@ -94,11 +95,12 @@ var _ = Describe("Subject Heartbeat", func() {
 		})
 
 		It("should send to multiple subjects", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(srv *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				hbConfig.Subjects = append(hbConfig.Subjects, config.Subject{
 					Name:     "heartbeat2",
 					Interval: "500ms",
 				})
+
 				jstream, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
 				Expect(err).ToNot(HaveOccurred())
 				jstream2, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
@@ -119,8 +121,40 @@ var _ = Describe("Subject Heartbeat", func() {
 			})
 		})
 
+		It("Should support in-process connections", func() {
+			testutil.WithJetStream(log, func(srv *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
+				hbConfig.Subjects = append(hbConfig.Subjects, config.Subject{
+					Name:     "heartbeat2",
+					Interval: "500ms",
+				})
+				hbConfig.Process = srv
+				hbConfig.URL = nc.ConnectedUrl()
+
+				jstream, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
+				Expect(err).ToNot(HaveOccurred())
+
+				hb, err := New(&hbConfig, "test_replicator", log)
+				Expect(err).ToNot(HaveOccurred())
+
+				go func() {
+					defer GinkgoRecover()
+					err = hb.Run(ctx, &wg)
+					Expect(err).ToNot(HaveOccurred())
+				}()
+				defer cancel()
+				Eventually(streamMesssage(jstream)).Should(BeNumerically(">=", 1))
+
+				conns, err := srv.Connz(nil)
+				Expect(err).ToNot(HaveOccurred())
+				conn := conns.Conns[1]
+				if conn.IP != "" || conn.Port != 0 {
+					Fail("Connection was not done in-process")
+				}
+			})
+		})
+
 		It("should send a well formed message", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				jstream, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
 				Expect(err).ToNot(HaveOccurred())
 				hbConfig.URL = nc.ConnectedUrl()
@@ -164,7 +198,7 @@ var _ = Describe("Subject Heartbeat", func() {
 		})
 
 		It("should perform leader election and set metrics", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				hbConfig.LeaderElection = true
 				jstream, err := mgr.NewStream("TEST", jsm.Subjects("heartbeat"))
 				Expect(err).ToNot(HaveOccurred())

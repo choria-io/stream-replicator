@@ -16,6 +16,7 @@ import (
 	"github.com/choria-io/stream-replicator/internal/testutil"
 	"github.com/golang/mock/gomock"
 	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -78,7 +79,7 @@ var _ = Describe("Advisor", func() {
 	}
 
 	It("Should support first seen callbacks", func() {
-		testutil.WithJetStream(log, func(nc *nats.Conn, _ *jsm.Manager) {
+		testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, _ *jsm.Manager) {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -96,7 +97,7 @@ var _ = Describe("Advisor", func() {
 	})
 
 	It("Should support expired callbacks", func() {
-		testutil.WithJetStream(log, func(nc *nats.Conn, _ *jsm.Manager) {
+		testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, _ *jsm.Manager) {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -121,7 +122,7 @@ var _ = Describe("Advisor", func() {
 	})
 
 	It("Should support recover callbacks", func() {
-		testutil.WithJetStream(log, func(nc *nats.Conn, _ *jsm.Manager) {
+		testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, _ *jsm.Manager) {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -139,7 +140,7 @@ var _ = Describe("Advisor", func() {
 	})
 
 	It("Should support warn callbacks", func() {
-		testutil.WithJetStream(log, func(nc *nats.Conn, _ *jsm.Manager) {
+		testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, _ *jsm.Manager) {
 			adv, err := setup(nc)
 			Expect(err).ToNot(HaveOccurred())
 

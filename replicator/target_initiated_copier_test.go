@@ -13,6 +13,7 @@ import (
 	"github.com/choria-io/stream-replicator/config"
 	"github.com/choria-io/stream-replicator/internal/testutil"
 	"github.com/nats-io/jsm.go"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -109,7 +110,7 @@ var _ = Describe("Target Initiated Copier", func() {
 
 	Describe("copyMessages", func() {
 		It("Should support resuming at the correct location when the consumer disappear", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 
 				// copy the first 1000 messages
@@ -168,7 +169,7 @@ var _ = Describe("Target Initiated Copier", func() {
 		})
 
 		It("Should support resuming at the correct location after restart", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 
 				// copy the first 1000 messages
@@ -229,7 +230,7 @@ var _ = Describe("Target Initiated Copier", func() {
 		})
 
 		It("Should resume from the correct location after purge", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(_ *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				ts, tcs := prepareStreams(nc, mgr, 1000)
 
 				// copy the first 1000 messages
@@ -281,10 +282,11 @@ var _ = Describe("Target Initiated Copier", func() {
 		})
 
 		It("Should copy all data", func() {
-			testutil.WithJetStream(log, func(nc *nats.Conn, mgr *jsm.Manager) {
+			testutil.WithJetStream(log, func(srv *server.Server, nc *nats.Conn, mgr *jsm.Manager) {
 				_, tcs := prepareStreams(nc, mgr, 1000)
 
 				sr, scfg := config(nc.ConnectedUrl())
+				scfg.SourceProcess = srv
 				stream, err := NewStream(scfg, sr, log)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -303,6 +305,13 @@ var _ = Describe("Target Initiated Copier", func() {
 				msg, err := tcs.ReadMessage(1)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(msg.Subject).To(Equal("copy.x.TEST"))
+
+				conns, err := srv.Connz(nil)
+				Expect(err).ToNot(HaveOccurred())
+				conn := conns.Conns[1]
+				if conn.IP != "" || conn.Port != 0 {
+					Fail("Connection was not done in-process")
+				}
 			})
 		})
 	})

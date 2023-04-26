@@ -32,7 +32,7 @@ type choriaConn interface {
 	Collective() string
 }
 
-func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, choria choriaConn, oldStyle bool, log *logrus.Entry) (nc *nats.Conn, err error) {
+func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, choria choriaConn, oldStyle bool, conn nats.InProcessConnProvider, log *logrus.Entry) (nc *nats.Conn, err error) {
 	opts := []nats.Option{
 		nats.MaxReconnects(-1),
 		nats.IgnoreAuthErrorAbort(),
@@ -145,6 +145,10 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 		}
 
 		urls = append(urls, parsed.Redacted())
+	}
+
+	if conn != nil {
+		opts = append(opts, nats.InProcessServer(conn))
 	}
 
 	err = backoff.TwoMinutesSlowStart.For(ctx, func(try int) error {
