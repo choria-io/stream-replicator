@@ -226,6 +226,14 @@ func (c *sourceInitiatedCopier) healthCheckSource() (fixed bool, err error) {
 		jsm.AckWait(30 * time.Second),
 	}
 
+	if c.cfg.Ephemeral {
+		// we fake an ephemeral consumer using a durable so that the name is static, simplifying the code significantly
+		opts = append(opts,
+			jsm.ConsumerOverrideReplicas(1),
+			jsm.ConsumerOverrideMemoryStorage(),
+			jsm.InactiveThreshold(5*pollFrequency))
+	}
+
 	if c.cfg.FilterSubject != _EMPTY_ {
 		opts = append(opts, jsm.FilterStreamBySubject(c.cfg.FilterSubject))
 	}
