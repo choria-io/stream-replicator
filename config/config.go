@@ -58,6 +58,8 @@ type Stream struct {
 	SourceProcess nats.InProcessConnProvider `json:"-"`
 	// NoTargetCreate in source initiated replication will prevent target stream creation or checks at start
 	NoTargetCreate bool `json:"no_target_create"`
+	// Ephemeral in source initiated replication indicates that an ephemeral consumer should be used, this will result in the entire stream being replicated at start, useful for KV buckets
+	Ephemeral bool ` json:"ephemeral"`
 	// TargetURL is the NATS server to send messages to in nats://user:pass@server form
 	TargetURL string `json:"target_url"`
 	// TargetProcess configures a in-process connection for the source
