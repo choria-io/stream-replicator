@@ -134,6 +134,8 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 				continue
 			}
 
+			health.Reset(c.s.hcInterval)
+
 			c.log.Debugf("Performing health checks")
 
 			fixed, err := c.healthCheckSource()
@@ -142,13 +144,11 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 			}
 
 			if fixed {
-				c.log.Warnf("Source consumer %s recreated", c.cname)
+				c.log.Infof("Source consumer %s recreated", c.cname)
 				consumerRepairCount.WithLabelValues(c.source.stream.Name(), c.sr.ReplicatorName, c.cfg.Name).Inc()
 				polled = time.Time{}
 				polls.Reset(50 * time.Millisecond)
 			}
-
-			health.Reset(c.s.hcInterval)
 
 		case msg := <-c.msgs:
 			if len(msg.Data) == 0 && msg.Header != nil {
@@ -260,9 +260,21 @@ func (c *sourceInitiatedCopier) healthCheckSource() (fixed bool, err error) {
 		return false, fmt.Errorf("stream %s does not exist, cannot recover consumer", c.cfg.Stream)
 	}
 
+	// on first start of an ephemeral we always recreate
+	forceRecreate := c.source.resumeSeq == 0 && c.cfg.Ephemeral
+
 	c.source.consumer, err = stream.LoadConsumer(c.cname)
-	if jsm.IsNatsError(err, 10014) {
-		c.log.Errorf("Consumer %s was not found, attempting to recreate", c.cname)
+	if forceRecreate || jsm.IsNatsError(err, 10014) {
+		// consumer exist, and we are forcing recreate, so we remove it
+		if forceRecreate && err == nil {
+			c.log.Warnf("Recreating ephemeral consumer %s", c.cname)
+			err = c.source.consumer.Delete()
+			if err != nil {
+				c.log.Warnf("Could not remove ephemeral consumer: %v", err)
+			}
+		} else {
+			c.log.Errorf("Consumer %s was not found, attempting to recreate", c.cname)
+		}
 		c.source.consumer, err = stream.NewConsumerFromDefault(jsm.DefaultConsumer, opts...)
 		fixed = err == nil
 	}
