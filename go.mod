@@ -16,7 +16,7 @@ require (
 	github.com/prometheus/client_model v0.3.0
 	github.com/segmentio/ksuid v1.0.4
 	github.com/sirupsen/logrus v1.9.0
-	github.com/tidwall/gjson v1.14.4
+	github.com/tidwall/gjson v1.17.0
 )
 
 require (
