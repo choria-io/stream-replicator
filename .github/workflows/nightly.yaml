@@ -35,6 +35,21 @@ jobs:
           packager_tag: el8-go1.20
           version: nightly
 
+  el9_64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: src/github.com/choria-io/aaasvc
+
+      - name: Build
+        uses: choria-io/actions/packager@main
+        with:
+          build_package: el9_64
+          packager_tag: el9-go1.20
+          version: nightly
+
   docker:
     needs:
       - upload
@@ -54,6 +69,7 @@ jobs:
     needs:
       - el7_64
       - el8_64
+      - el9_64
 
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,11 @@
+required_properties:
+  - name
+  - bindir
+  - etcdir
+  - release
+  - dist
+
+artifacts:
+  - /usr/src/redhat/**/*.rpm
+  - /root/rpmbuild/**/*.rpm
+
