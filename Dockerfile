@@ -1,6 +1,6 @@
-FROM almalinux:8
+FROM almalinux:9
 
-ARG REPO="https://yum.eu.choria.io/release/el/release.repo"
+ARG REPO="https://yum.de.choria.io/release/el/release.repo"
 
 WORKDIR /
 ENTRYPOINT ["/usr/sbin/stream-replicator"]

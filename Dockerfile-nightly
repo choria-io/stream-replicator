@@ -1,11 +1,11 @@
-FROM almalinux:8
+FROM almalinux:9
 
 ARG DATE="unknown"
 
 WORKDIR /
 ENTRYPOINT ["/usr/sbin/stream-replicator"]
 
-COPY stream-replicator-0.99.0.${DATE}-1.el8.x86_64.rpm /tmp
+COPY stream-replicator-0.99.0.${DATE}-1.el9.x86_64.rpm /tmp
 
 RUN yum -y install nc procps-ng openssl && \
     yum -y localinstall /tmp/stream-replicator-0.99.0.${DATE}-1.el8.x86_64.rpm && \
