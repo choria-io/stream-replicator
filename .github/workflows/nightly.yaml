@@ -11,7 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          path: src/github.com/choria-io/aaasvc
+          path: src/github.com/choria-io/stream-replicator
 
       - name: Build
         uses: choria-io/actions/packager@main
@@ -26,7 +26,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          path: src/github.com/choria-io/aaasvc
+          path: src/github.com/choria-io/stream-replicator
 
       - name: Build
         uses: choria-io/actions/packager@main
@@ -41,7 +41,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          path: src/github.com/choria-io/aaasvc
+          path: src/github.com/choria-io/stream-replicator
 
       - name: Build
         uses: choria-io/actions/packager@main
