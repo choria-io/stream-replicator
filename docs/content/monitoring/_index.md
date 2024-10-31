@@ -194,6 +194,7 @@ We have extensive Prometheus Metrics about the operation of the system allowing 
 | `choria_stream_replicator_advisor_publish_errors`                     | The number of times publishing advisories failed                                             |
 | `choria_stream_replicator_advisor_publish_total_messages`             | The total number of advisories sent                                                          |
 | `choria_stream_replicator_limiter_messages_without_limit_field_count` | The number of messages that did not have the data field or header used for limiting/sampling |
+| `choria_stream_replicator_limiter_messages_copy_forced_count`         | The number of messages copied due to `inspect_force_field` value                             |
 | `choria_stream_replicator_replicator_total_messages`                  | The total number of messages processed including ones that would be ignored                  |
 | `choria_stream_replicator_replicator_total_bytess`                    | The size of messages processed including ones that would be ignored                          |
 | `choria_stream_replicator_replicator_handler_error_count`             | The number of times the handler failed to process a message                                  |

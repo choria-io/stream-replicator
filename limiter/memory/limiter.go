@@ -19,42 +19,45 @@ import (
 )
 
 type limiter struct {
-	jsonField  string
-	header     string
-	token      int
-	duration   time.Duration
-	replicator string
-	stream     string
-	name       string
-	processed  *idtrack.Tracker
-	stateFile  string
-	syncSubj   string
-	log        *logrus.Entry
-	mu         *sync.Mutex
+	jsonField      string
+	jsonForceField string
+	header         string
+	token          int
+	duration       time.Duration
+	replicator     string
+	stream         string
+	name           string
+	processed      *idtrack.Tracker
+	stateFile      string
+	syncSubj       string
+	log            *logrus.Entry
+	mu             *sync.Mutex
 }
-
-var _EMPTY_ = ""
 
 func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name string, replicator string, nc *nats.Conn, log *logrus.Entry) (*limiter, error) {
 	if cfg.InspectDuration == 0 {
 		return nil, fmt.Errorf("inspect duration not set, memory limiter can not start")
 	}
-	if name == _EMPTY_ {
+	if name == "" {
 		return nil, fmt.Errorf("name is not set, memory limiter can not start")
 	}
-	if replicator == _EMPTY_ {
+	if replicator == "" {
 		return nil, fmt.Errorf("replicator name is required")
+	}
+	if cfg.InspectJSONForceField != "" && cfg.InspectJSONField == "" {
+		return nil, fmt.Errorf("forcing based on json field requires both inspect_field and inspect_force_field set")
 	}
 
 	l := &limiter{
-		name:       name,
-		duration:   cfg.InspectDuration,
-		jsonField:  cfg.InspectJSONField,
-		header:     cfg.InspectHeaderValue,
-		token:      cfg.InspectSubjectToken,
-		stateFile:  cfg.StateFile,
-		stream:     cfg.Stream,
-		replicator: replicator,
+		name:           name,
+		duration:       cfg.InspectDuration,
+		jsonField:      cfg.InspectJSONField,
+		jsonForceField: cfg.InspectJSONForceField,
+		header:         cfg.InspectHeaderValue,
+		token:          cfg.InspectSubjectToken,
+		stateFile:      cfg.StateFile,
+		stream:         cfg.Stream,
+		replicator:     replicator,
 		log: log.WithFields(logrus.Fields{
 			"limiter":  "memory",
 			"duration": cfg.InspectDuration.String(),
@@ -67,10 +70,13 @@ func New(ctx context.Context, wg *sync.WaitGroup, cfg *config.Stream, name strin
 	}
 
 	switch {
-	case l.jsonField != _EMPTY_:
+	case l.jsonField != "":
 		l.log = l.log.WithField("field", l.jsonField)
+		if l.jsonForceField != "" {
+			l.log = l.log.WithField("force_field", l.jsonForceField)
+		}
 
-	case l.header != _EMPTY_:
+	case l.header != "":
 		l.log = l.log.WithField("header", l.header)
 
 	case l.token != 0:
@@ -98,9 +104,21 @@ func (l *limiter) Tracker() *idtrack.Tracker {
 
 func (l *limiter) ProcessAndRecord(msg *nats.Msg, f func(msg *nats.Msg, process bool) error) error {
 	var trackValue string
+	var mustCopy bool
 
 	switch {
-	case l.jsonField != _EMPTY_:
+	case l.jsonForceField != "" && l.jsonField != "":
+		res := gjson.GetBytes(msg.Data, l.jsonField)
+		if res.Exists() {
+			trackValue = res.String()
+		}
+
+		res = gjson.GetBytes(msg.Data, l.jsonForceField)
+		if res.Exists() {
+			mustCopy = true
+		}
+
+	case l.jsonField != "":
 		res := gjson.GetBytes(msg.Data, l.jsonField)
 		if res.Exists() {
 			trackValue = res.String()
@@ -115,16 +133,26 @@ func (l *limiter) ProcessAndRecord(msg *nats.Msg, f func(msg *nats.Msg, process 
 			trackValue = parts[l.token-1]
 		}
 
-	case l.header != _EMPTY_:
+	case l.header != "":
 		trackValue = msg.Header.Get(l.header)
 	}
 
-	if trackValue == _EMPTY_ {
+	if trackValue == "" {
 		limiterMessagesWithoutTrackingFieldCount.WithLabelValues("memory", l.name, l.replicator).Inc()
 	}
 
+	if mustCopy {
+		limiterMessageForcedByField.WithLabelValues("memory", l.name, l.replicator).Inc()
+	}
+
 	sz := float64(len(msg.Data))
-	shouldProcess := l.processed.ShouldProcess(trackValue, sz)
+	var shouldProcess bool
+
+	if mustCopy {
+		shouldProcess = true
+	} else {
+		shouldProcess = l.processed.ShouldProcess(trackValue, sz)
+	}
 	l.processed.RecordSeen(trackValue, sz)
 
 	err := f(msg, shouldProcess)
@@ -132,7 +160,7 @@ func (l *limiter) ProcessAndRecord(msg *nats.Msg, f func(msg *nats.Msg, process 
 		return err
 	}
 
-	if shouldProcess {
+	if shouldProcess || mustCopy {
 		l.processed.RecordCopied(trackValue)
 	}
 

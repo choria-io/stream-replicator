@@ -54,10 +54,6 @@ var (
 	AdvisoryProtocol           = "io.choria.sr.v2.age_advisory"
 )
 
-const (
-	_EMPTY_ = ""
-)
-
 type Advisor struct {
 	cfg          *config.Advisory
 	nc           *nats.Conn
@@ -156,7 +152,7 @@ func (a *Advisor) publisher(ctx context.Context, wg *sync.WaitGroup) {
 
 			msg := nats.NewMsg(subject)
 			msg.Data = d
-			if advisory.EventID != _EMPTY_ {
+			if advisory.EventID != "" {
 				msg.Header.Add(api.JSMsgId, advisory.EventID)
 			}
 

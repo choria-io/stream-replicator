@@ -87,4 +87,30 @@ Pick the `inspect_duration` based on your needs but ensure that it is longer tha
 The advisory subject can have `%s` in it that will be replaced with the event type (like `timeout`) and a `%v` that will be replaced with the value being tracked. Use this to partition the advisories or to help searching a large store of them
 {{% /notice %}}
 
-We configure advisories that will inform us about statusses of data, advisories will be published to a Stream with the subject `NODE_DATA_ADVISORIES` and they will be retried a few times should they fail. See [Sampling Advisories](../../monitoring/#sampling-advisories) for details about advisories.
+We configure advisories that will inform us about statuses of data, advisories will be published to a Stream with the subject `NODE_DATA_ADVISORIES` and they will be retried a few times should they fail. See [Sampling Advisories](../../monitoring/#sampling-advisories) for details about advisories.
+
+## Forcing copying despite sampling
+
+In some cases you know your data has changed significantly and want to force a copy, since version 0.9.0 you can force a copy using
+a specific JSON boolean in your data.
+
+```yaml
+streams:
+  - stream: NODE_DATA
+    source_url: nats://nats.us-east.example.net:4222
+    target_url: nats://nats.central.example.net:4222
+    inspect_field: sender
+    inspect_force_field: force_copy
+    inspect_duration: 1h
+    warn_duration: 12m
+    size_trigger: 1024
+    advisory:
+       subject: NODE_DATA_ADVISORIES
+       reliable: true
+```
+
+Here we have the identical configuration to the previous section but with the added `inspect_force_field` added, in your JSON data if this field is set to `true` the specific message will be copied regardless.
+
+{{% notice style="warning" %}}
+Care should be taken to not always set this or set it on changes like timestamps as that will nullify the gains from limiting and potentially DDOS your upstreams.
+{{% /notice %}}

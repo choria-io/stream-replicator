@@ -67,6 +67,44 @@ var _ = Describe("Limiter", func() {
 			})).ToNot(HaveOccurred())
 		})
 
+		It("Should handle present force copy fields", func() {
+			cfg.InspectJSONForceField = "force_copy"
+			cfg.InspectJSONField = "sender"
+
+			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
+			Expect(err).ToNot(HaveOccurred())
+
+			msg := nats.NewMsg("test")
+			msg.Data = []byte(`{"sender":"some.node"}`)
+
+			processed := 0
+			skipped := 0
+
+			handler := func(msg *nats.Msg, process bool) error {
+				if process {
+					processed++
+				} else {
+					skipped++
+				}
+
+				return nil
+			}
+
+			Expect(limiter.ProcessAndRecord(msg, handler)).ToNot(HaveOccurred())
+			Expect(limiter.ProcessAndRecord(msg, handler)).ToNot(HaveOccurred())
+			Expect(processed).To(Equal(1))
+			Expect(skipped).To(Equal(1))
+			msg.Data = []byte(`{"sender":"some.node", "force_copy":true}`)
+			Expect(limiter.ProcessAndRecord(msg, handler)).ToNot(HaveOccurred())
+			Expect(limiter.ProcessAndRecord(msg, handler)).ToNot(HaveOccurred())
+			Expect(processed).To(Equal(3))
+			Expect(skipped).To(Equal(1))
+			msg.Data = []byte(`{"sender":"some.node"}`)
+			Expect(limiter.ProcessAndRecord(msg, handler)).ToNot(HaveOccurred())
+			Expect(processed).To(Equal(3))
+			Expect(skipped).To(Equal(2))
+		})
+
 		It("Should handle present json fields", func() {
 			cfg.InspectJSONField = "sender"
 			limiter, err := New(ctx, &wg, cfg, "GINKGO", "GINKGO", nil, log)
