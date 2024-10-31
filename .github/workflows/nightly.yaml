@@ -5,21 +5,6 @@ on:
     - cron: "40 4 * * *"
 
 jobs:
-  el7_64:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: src/github.com/choria-io/stream-replicator
-
-      - name: Build
-        uses: choria-io/actions/packager@main
-        with:
-          build_package: el7_64
-          packager_tag: el7-go1.21
-          version: nightly
-
   el8_64:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +17,7 @@ jobs:
         uses: choria-io/actions/packager@main
         with:
           build_package: el8_64
-          packager_tag: el8-go1.21
+          packager_tag: el8-go1.22
           version: nightly
 
   el9_64:
@@ -47,7 +32,7 @@ jobs:
         uses: choria-io/actions/packager@main
         with:
           build_package: el9_64
-          packager_tag: el9-go1.21
+          packager_tag: el9-go1.22
           version: nightly
 
   docker:
@@ -67,7 +52,6 @@ jobs:
 
   upload:
     needs:
-      - el7_64
       - el8_64
       - el9_64
 
