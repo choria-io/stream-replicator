@@ -64,7 +64,6 @@ const (
 	pollFrequency    = 10 * time.Second
 	srcHeader        = "Choria-SR-Source"
 	srcHeaderPattern = "%s %d %s %s %d"
-	_EMPTY_          = ""
 )
 
 func (t *Target) Close() error {
@@ -81,16 +80,16 @@ func (t *Target) Close() error {
 }
 
 func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*Stream, error) {
-	if stream.Stream == _EMPTY_ {
+	if stream.Stream == "" {
 		return nil, fmt.Errorf("stream name is required")
 	}
-	if stream.SourceURL == _EMPTY_ {
+	if stream.SourceURL == "" {
 		return nil, fmt.Errorf("source_url is required")
 	}
-	if stream.TargetURL == _EMPTY_ {
+	if stream.TargetURL == "" {
 		return nil, fmt.Errorf("target_url is required")
 	}
-	if stream.TargetStream == _EMPTY_ {
+	if stream.TargetStream == "" {
 		stream.TargetStream = stream.Stream
 	}
 	if stream.TargetInitiated && stream.NoTargetCreate {
@@ -98,7 +97,7 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 	}
 
 	name := "stream_replicator"
-	if stream.Name != _EMPTY_ {
+	if stream.Name != "" {
 		if strings.HasPrefix("SR_", stream.Name) {
 			name = stream.Name
 		} else {
@@ -112,7 +111,7 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 		cname:      name,
 		mu:         &sync.Mutex{},
 		hcInterval: time.Minute,
-		paused:     stream.LeaderElectionName != _EMPTY_,
+		paused:     stream.LeaderElectionName != "",
 		log: log.WithFields(logrus.Fields{
 			"source": stream.Stream,
 			"target": stream.TargetStream,
@@ -131,7 +130,7 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 		return err
 	}
 
-	if s.cfg.InspectJSONField != _EMPTY_ && s.cfg.InspectDuration > 0 {
+	if s.cfg.InspectJSONField != "" && s.cfg.InspectDuration > 0 {
 		nc, err := s.connectAdvisories(ctx)
 		if err != nil {
 			return err
@@ -150,7 +149,7 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 		}
 	}
 
-	if s.cfg.LeaderElectionName != _EMPTY_ {
+	if s.cfg.LeaderElectionName != "" {
 		err = s.setupElection(ctx)
 		if err != nil {
 			s.log.Errorf("Could not set up elections: %v", err)
@@ -183,12 +182,12 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) error {
 }
 
 func (s *Stream) targetForSubject(subj string) string {
-	if s.cfg.TargetPrefix != _EMPTY_ {
+	if s.cfg.TargetPrefix != "" {
 		subj = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, subj)
 		subj = strings.Replace(subj, "..", ".", -1)
 	}
 
-	if s.cfg.TargetRemoveString != _EMPTY_ {
+	if s.cfg.TargetRemoveString != "" {
 		subj = strings.Replace(subj, s.cfg.TargetRemoveString, "", -1)
 		subj = strings.Replace(subj, "..", ".", -1)
 	}
@@ -319,19 +318,19 @@ func (s *Stream) connectDestination(ctx context.Context) (err error) {
 	scfg := s.source.cfg
 	s.source.mu.Unlock()
 
-	if s.cfg.TargetPrefix != _EMPTY_ || s.cfg.TargetRemoveString != _EMPTY_ {
+	if s.cfg.TargetPrefix != "" || s.cfg.TargetRemoveString != "" {
 		var subjects []string
 
 		for _, sub := range scfg.Subjects {
 			var target string
 
-			if s.cfg.TargetPrefix != _EMPTY_ {
+			if s.cfg.TargetPrefix != "" {
 				target = fmt.Sprintf("%s.%s", s.cfg.TargetPrefix, sub)
 			} else {
 				target = sub
 			}
 
-			if s.cfg.TargetRemoveString != _EMPTY_ {
+			if s.cfg.TargetRemoveString != "" {
 				target = strings.Replace(target, s.cfg.TargetRemoveString, "", -1)
 				target = strings.Replace(target, "..", ".", -1)
 			}

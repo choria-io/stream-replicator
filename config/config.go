@@ -91,6 +91,8 @@ type Stream struct {
 	MaxAgeString string `json:"max_age"`
 	// InspectJSONField will inspect a specific field in JSON payloads and limit sends by this field
 	InspectJSONField string `json:"inspect_field"`
+	// InspectJSONForceField will inspect a specific field in the JSON payloads and force the limiter to publish the message
+	InspectJSONForceField string `json:"inspect_force_field"`
 	// InspectHeaderValue inspects the value of a header and does limiting based on that
 	InspectHeaderValue string `json:"inspect_header"`
 	// InspectSubjectToken inspects a certain token and limits based on that, -1 inspects the entire subject, 0 disables

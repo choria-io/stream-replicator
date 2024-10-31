@@ -370,7 +370,7 @@ func (c *targetInitiatedCopier) recreateEphemeraLocked() (bool, error) {
 		jsm.IdleHeartbeat(20 * time.Second),
 	}
 
-	if c.cfg.FilterSubject != _EMPTY_ {
+	if c.cfg.FilterSubject != "" {
 		opts = append(opts, jsm.FilterStreamBySubject(c.cfg.FilterSubject))
 	}
 

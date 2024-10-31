@@ -52,10 +52,6 @@ type Tracker struct {
 	sync.Mutex
 }
 
-const (
-	_EMPTY_ = ""
-)
-
 func New(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, warn time.Duration, sizeTrigger float64, stateFile string, stream string, worker string, replicator string, nc *nats.Conn, syncSubject string, log *logrus.Entry) (*Tracker, error) {
 	t := &Tracker{
 		Items:       map[string]*Item{},
@@ -198,7 +194,7 @@ func (t *Tracker) NotifyExpired(cb func(map[string]Item)) error {
 
 // RecordSeen records that we saw the item
 func (t *Tracker) RecordSeen(v string, sz float64) {
-	if v == _EMPTY_ {
+	if v == "" {
 		return
 	}
 
@@ -272,7 +268,7 @@ func (t *Tracker) lastSeen(v string) (time.Time, time.Time, float64) {
 
 // ShouldProcess determines if a message should be processed considering last seen times, size deltas and copied delta
 func (t *Tracker) ShouldProcess(v string, sz float64) bool {
-	if v == _EMPTY_ {
+	if v == "" {
 		return true
 	}
 
@@ -319,8 +315,8 @@ func (t *Tracker) loadState() error {
 	t.Lock()
 	defer t.Unlock()
 
-	if t.stateFile == _EMPTY_ {
-		t.log.Warnf("Tacker state tracking not configured")
+	if t.stateFile == "" {
+		t.log.Warnf("Tracker state tracking not configured")
 		return nil
 	}
 
@@ -360,7 +356,7 @@ func (t *Tracker) saveState() error {
 	t.Lock()
 	defer t.Unlock()
 
-	if t.stateFile == _EMPTY_ {
+	if t.stateFile == "" {
 		return nil
 	}
 

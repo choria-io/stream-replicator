@@ -68,7 +68,7 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 
 	nc := c.source.nc
 	ib := nc.NewRespInbox()
-	c.source.sub, err = nc.ChanQueueSubscribe(ib, _EMPTY_, c.msgs)
+	c.source.sub, err = nc.ChanQueueSubscribe(ib, "", c.msgs)
 	c.source.mu.Unlock()
 	if err != nil {
 		return err
@@ -234,7 +234,7 @@ func (c *sourceInitiatedCopier) healthCheckSource() (fixed bool, err error) {
 			jsm.InactiveThreshold(5*pollFrequency))
 	}
 
-	if c.cfg.FilterSubject != _EMPTY_ {
+	if c.cfg.FilterSubject != "" {
 		opts = append(opts, jsm.FilterStreamBySubject(c.cfg.FilterSubject))
 	}
 
