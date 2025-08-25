@@ -56,6 +56,31 @@ We support using NATS credentials, JWT and NKey files for authentication by addi
 | Credentials file      | `nats://example.net:4222?credentials=/path/to/creds`              |
 | JWT and NKey files    | `nats://example.net:4222?jwt=/path/to/my.jwt&nkey=/path/to/my.nk` |
 
+## Connection URL Options
+
+You can further tune the client connection by adding query parameters to any Source or Target NATS URL. These options can be combined with credentials.
+
+| Option                | Values         | Purpose                                                                 | Example                                                       |
+|-----------------------|----------------|-------------------------------------------------------------------------|---------------------------------------------------------------|
+| `tls_handshake_first` | `true`/`false` | Perform TLS handshake before the NATS INFO protocol. Useful with some load balancers/proxies. Only meaningful when TLS is used. | `nats://example.net:4222?tls_handshake_first=true`           |
+| `insecure`            | `true`/`false` | Skip TLS certificate verification (InsecureSkipVerify). For testing only. | `nats://example.net:4222?insecure=true`                       |
+| `connect_timeout`     | duration       | Client connect timeout. Supports values like `500ms`, `2s`, `1m30s`.    | `nats://example.net:4222?connect_timeout=1500ms`             |
+
+Examples:
+
+```yaml
+# Minimal examples
+streams:
+  - first:
+      source: nats://source.example.net:4222?connect_timeout=2s
+      target: nats://target.example.net:4222?tls_handshake_first=true
+
+# Combined with credentials
+  - second:
+      source: nats://source.example.net:4222?credentials=/etc/nats.creds&connect_timeout=5s
+      target: nats://target.example.net:4222?jwt=/etc/client.jwt&nkey=/etc/client.nk&insecure=true
+```
+
 ## TLS
 
 TLS is supported, one can have per Target or Source settings.  Per Stream settings or per Replicator settings.  The most specific will be used for example, given this partial configuration file:
