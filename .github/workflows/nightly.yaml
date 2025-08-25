@@ -17,7 +17,7 @@ jobs:
         uses: choria-io/actions/packager@main
         with:
           build_package: el8_64
-          packager_tag: el8-go1.22
+          packager_tag: el8-go1.24
           version: nightly
 
   el9_64:
@@ -32,7 +32,7 @@ jobs:
         uses: choria-io/actions/packager@main
         with:
           build_package: el9_64
-          packager_tag: el9-go1.22
+          packager_tag: el9-go1.24
           version: nightly
 
   docker:
