@@ -32,8 +32,8 @@ type choriaConn interface {
 	Collective() string
 }
 
-func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, choria choriaConn, oldStyle bool, conn nats.InProcessConnProvider, log *logrus.Entry) (nc *nats.Conn, err error) {
-	opts := []nats.Option{
+func buildNatsOptions(name string, srv string, tlsc tlsConfig, choria choriaConn, oldStyle bool, conn nats.InProcessConnProvider, log *logrus.Entry) (opts []nats.Option, urls []string, err error) {
+	opts = []nats.Option{
 		nats.MaxReconnects(-1),
 		nats.IgnoreAuthErrorAbort(),
 		nats.NoEcho(),
@@ -91,12 +91,12 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 		if choria.SeedFile() != "" && choria.TokenFile() != "" {
 			token, err := os.ReadFile(choria.TokenFile())
 			if err != nil {
-				return nil, fmt.Errorf("could not set up choria connection: %w", err)
+				return nil, nil, fmt.Errorf("could not set up choria connection: %w", err)
 			}
 
 			inbox, jwth, sigh, err := tokens.NatsConnectionHelpers(string(token), choria.Collective(), choria.SeedFile(), log)
 			if err != nil {
-				return nil, fmt.Errorf("could not set up choria connection: %w", err)
+				return nil, nil, fmt.Errorf("could not set up choria connection: %w", err)
 			}
 
 			opts = append(opts, nats.Token(string(token)))
@@ -113,18 +113,17 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 		}
 	}
 
-	var urls []string
 	var hasCreds bool
 	for _, u := range strings.Split(srv, ",") {
 		parsed, err := url.Parse(strings.TrimSpace(u))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if !hasCreds && parsed.RawQuery != "" {
 			queries, err := url.ParseQuery(parsed.RawQuery)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if queries.Has("credentials") {
@@ -132,6 +131,32 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 				log.Debugf("Using %q as credentials file", creds)
 				opts = append(opts, nats.UserCredentials(creds))
 				hasCreds = true
+			}
+
+			if queries.Has("tls_handshake_first") {
+				tlsHandshakeFirst, _ := strconv.ParseBool(queries.Get("tls_handshake_first"))
+				if tlsHandshakeFirst && tlsc != nil {
+					log.Debugf("TLS Handshake before INFO protocol")
+					opts = append(opts, nats.TLSHandshakeFirst())
+				}
+			}
+
+			if queries.Has("insecure") {
+				insecure, _ := strconv.ParseBool(queries.Get("insecure"))
+				if insecure {
+					log.Debugf("Skipping TLS verification")
+					opts = append(opts, nats.Secure(&tls.Config{InsecureSkipVerify: true}))
+				}
+			}
+
+			if queries.Has("connect_timeout") {
+				connect_timeout, err := ParseDurationString(queries.Get("connect_timeout"))
+				if err != nil {
+					log.Debugf("invalid connect_timeout: %v", err)
+				} else {
+					log.Debugf("Setting NATS connect timeout to %q", connect_timeout)
+					opts = append(opts, nats.Timeout(connect_timeout))
+				}
 			}
 
 			if queries.Has("jwt") && queries.Has("nkey") {
@@ -149,6 +174,15 @@ func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, c
 
 	if conn != nil {
 		opts = append(opts, nats.InProcessServer(conn))
+	}
+
+	return opts, urls, nil
+}
+
+func ConnectNats(ctx context.Context, name string, srv string, tlsc tlsConfig, choria choriaConn, oldStyle bool, conn nats.InProcessConnProvider, log *logrus.Entry) (nc *nats.Conn, err error) {
+	opts, urls, err := buildNatsOptions(name, srv, tlsc, choria, oldStyle, conn, log)
+	if err != nil {
+		return nil, err
 	}
 
 	err = backoff.TwoMinutesSlowStart.For(ctx, func(try int) error {
