@@ -153,7 +153,7 @@ func (c *sourceInitiatedCopier) copyMessages(ctx context.Context) error {
 		case msg := <-c.msgs:
 			if len(msg.Data) == 0 && msg.Header != nil {
 				status := msg.Header.Get("Status")
-				if status == "404" || status == "408" || status == "409" {
+				if status == "404" || status == "408" || status == "409" || status == "503" {
 					continue
 				}
 			}
