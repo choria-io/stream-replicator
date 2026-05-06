@@ -34,18 +34,20 @@ type copier interface {
 }
 
 type Stream struct {
-	sr         *config.Config
-	cfg        *config.Stream
-	cname      string
-	log        *logrus.Entry
-	source     *Target
-	dest       *Target
-	limiter    Limiter
-	advisor    *advisor.Advisor
-	hcInterval time.Duration
-	paused     bool
-	copier     copier
-	mu         *sync.Mutex
+	sr             *config.Config
+	cfg            *config.Stream
+	cname          string
+	log            *logrus.Entry
+	source         *Target
+	dest           *Target
+	limiter        Limiter
+	advisor        *advisor.Advisor
+	hcInterval     time.Duration
+	paused         bool
+	copier         copier
+	mu             *sync.Mutex
+	leadershipWon  chan struct{}
+	leadershipLost chan struct{}
 }
 
 type Target struct {
@@ -106,12 +108,14 @@ func NewStream(stream *config.Stream, sr *config.Config, log *logrus.Entry) (*St
 	}
 
 	return &Stream{
-		sr:         sr,
-		cfg:        stream,
-		cname:      name,
-		mu:         &sync.Mutex{},
-		hcInterval: time.Minute,
-		paused:     stream.LeaderElectionName != "",
+		sr:             sr,
+		cfg:            stream,
+		cname:          name,
+		mu:             &sync.Mutex{},
+		hcInterval:     time.Minute,
+		paused:         stream.LeaderElectionName != "",
+		leadershipWon:  make(chan struct{}, 1),
+		leadershipLost: make(chan struct{}, 1),
 		log: log.WithFields(logrus.Fields{
 			"source": stream.Stream,
 			"target": stream.TargetStream,
@@ -210,6 +214,10 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		s.mu.Lock()
 		s.log.Warnf("Became the leader")
 		s.paused = false
+		select {
+		case s.leadershipWon <- struct{}{}:
+		default:
+		}
 		if s.advisor != nil {
 			s.advisor.Resume()
 		}
@@ -220,6 +228,10 @@ func (s *Stream) setupElection(ctx context.Context) error {
 		s.mu.Lock()
 		s.log.Warnf("Lost the leadership")
 		s.paused = true
+		select {
+		case s.leadershipLost <- struct{}{}:
+		default:
+		}
 		if s.advisor != nil {
 			s.advisor.Pause()
 		}

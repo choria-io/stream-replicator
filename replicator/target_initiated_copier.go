@@ -26,35 +26,33 @@ import (
 )
 
 type targetInitiatedCopier struct {
-	mu        sync.Mutex
-	health    *time.Ticker
-	lastCSeq  uint64
-	wasPaused bool
-	msgs      chan *nats.Msg
-	reset     chan uint64
-	s         *Stream
-	sr        *config.Config
-	source    *Target
-	dest      *Target
-	cfg       *config.Stream
-	log       *logrus.Entry
+	mu       sync.Mutex
+	health   *time.Ticker
+	lastCSeq uint64
+	msgs     chan *nats.Msg
+	reset    chan uint64
+	s        *Stream
+	sr       *config.Config
+	source   *Target
+	dest     *Target
+	cfg      *config.Stream
+	log      *logrus.Entry
 }
 
 const msgsChanBuffer = 100000
 
 func newTargetInitiatedCopier(s *Stream, log *logrus.Entry) *targetInitiatedCopier {
 	return &targetInitiatedCopier{
-		mu:        sync.Mutex{},
-		s:         s,
-		source:    s.source,
-		dest:      s.dest,
-		cfg:       s.cfg,
-		sr:        s.sr,
-		log:       log.WithField("copier", "target_initiated"),
-		health:    time.NewTicker(time.Millisecond),
-		msgs:      make(chan *nats.Msg, msgsChanBuffer),
-		reset:     make(chan uint64, 1),
-		wasPaused: s.isPaused(),
+		mu:     sync.Mutex{},
+		s:      s,
+		source: s.source,
+		dest:   s.dest,
+		cfg:    s.cfg,
+		sr:     s.sr,
+		log:    log.WithField("copier", "target_initiated"),
+		health: time.NewTicker(time.Millisecond),
+		msgs:   make(chan *nats.Msg, msgsChanBuffer),
+		reset:  make(chan uint64, 1),
 	}
 }
 
@@ -146,29 +144,14 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 	c.log.Infof("Starting Target-initiated data copier for %s", c.cfg.Stream)
 
 	for {
-		paused := c.s.isPaused()
-
-		// Lost leadership - cleanup by unsubscribing
-		if paused && !c.wasPaused {
+		select {
+		case <-c.s.leadershipLost:
 			c.log.Warnf("Lost leadership, unsubscribing target-initiated subscription")
 			c.cleanupOnLeadershipLoss()
-		}
 
-		// Regained leadership - why should we handle this case ? Slow, based on timing
-		// cleanup set c.source.sub = nil, c.source.consumer remains non-nil
-		// leadership Regained -> nothing happens instantly, health tick fires
-		// healthCheckSource() sees c.source.consumer != nil & calls LoadConsumer()
-		// if the server already deleted it, recreate happens
-		// if it still exists, may not recreate a fresh sub instantly unless the health path concludes repair is needed
-		// So we're doing runHealthCheck
-		if !paused && c.wasPaused {
+		case <-c.s.leadershipWon:
 			c.log.Infof("Regained leadership, checking source consumer immediately")
 			c.runHealthCheck()
-		}
-
-		c.wasPaused = paused
-
-		select {
 		case msg := <-c.msgs:
 			if c.s.isPaused() {
 				continue
