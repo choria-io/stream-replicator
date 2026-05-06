@@ -408,7 +408,10 @@ func (c *targetInitiatedCopier) recreateEphemeral() (bool, error) {
 func (c *targetInitiatedCopier) recreateEphemeraLocked() (bool, error) {
 	var err error
 	if c.source.sub != nil && c.source.sub.IsValid() {
-		c.cleanupOnLeadershipLoss()
+		err = c.source.sub.Unsubscribe()
+		if err != nil {
+			return false, fmt.Errorf("unsubscribe failed: %v", err)
+		}
 	}
 
 	c.source.sub, err = c.source.nc.ChanSubscribe(c.source.nc.NewRespInbox(), c.msgs)
