@@ -189,18 +189,9 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 				continue
 			}
 
-			c.source.mu.Lock()
-			err := c.source.sub.Unsubscribe()
-			if err != nil {
-				c.log.Warnf("Could not unsubscribe from last inbox: %v", err)
-			}
+			c.cleanupOnLeadershipLoss()
 
-			// drop all in flight messages
-			close(c.msgs)
-			c.msgs = make(chan *nats.Msg, msgsChanBuffer)
-			c.source.mu.Unlock()
-
-			_, err = c.recreateEphemeral()
+			_, err := c.recreateEphemeral()
 			if err != nil {
 				c.log.Errorf("Recreating consumer after reset failed: %v", err)
 				continue
@@ -417,10 +408,7 @@ func (c *targetInitiatedCopier) recreateEphemeral() (bool, error) {
 func (c *targetInitiatedCopier) recreateEphemeraLocked() (bool, error) {
 	var err error
 	if c.source.sub != nil && c.source.sub.IsValid() {
-		err = c.source.sub.Unsubscribe()
-		if err != nil {
-			return false, fmt.Errorf("unsubscribe failed: %v", err)
-		}
+		c.cleanupOnLeadershipLoss()
 	}
 
 	c.source.sub, err = c.source.nc.ChanSubscribe(c.source.nc.NewRespInbox(), c.msgs)
