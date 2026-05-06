@@ -39,7 +39,7 @@ type targetInitiatedCopier struct {
 	log      *logrus.Entry
 }
 
-const msgsChanBuffer = 100000
+const msgsChanBuffer = 10000
 
 func newTargetInitiatedCopier(s *Stream, log *logrus.Entry) *targetInitiatedCopier {
 	return &targetInitiatedCopier{
