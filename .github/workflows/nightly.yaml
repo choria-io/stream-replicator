@@ -4,36 +4,39 @@ on:
   schedule:
     - cron: "40 4 * * *"
 
+env:
+  build_version: nightly
+
 jobs:
-  el8_64:
+  el_64:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: src/github.com/choria-io/stream-replicator
-
       - name: Build
         uses: choria-io/actions/packager@main
         with:
-          build_package: el8_64
-          packager_tag: el8-go1.24
-          version: nightly
+          build_package: el_64
+          packager_tag: el-go1.26
+          version: ${{ env.build_version }}
 
-  el9_64:
+  el_ppc64le:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: src/github.com/choria-io/stream-replicator
-
       - name: Build
         uses: choria-io/actions/packager@main
         with:
-          build_package: el9_64
-          packager_tag: el9-go1.24
-          version: nightly
+          build_package: el_ppc64le
+          packager_tag: el-go1.26
+          version: ${{ env.build_version }}
+
+  el_aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build
+        uses: choria-io/actions/packager@main
+        with:
+          build_package: el_aarch64
+          packager_tag: el-go1.26
+          version: ${{ env.build_version }}
 
   docker:
     needs:
@@ -52,13 +55,14 @@ jobs:
 
   upload:
     needs:
-      - el8_64
-      - el9_64
+      - el_64
+      - el_aarch64
+      - el_ppc64le
 
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
 

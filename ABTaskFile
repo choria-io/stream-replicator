@@ -19,11 +19,17 @@ commands:
               description: Enable using go proxy
               bool: true
               default: "true"
+            - name: actions
+              bool: true
+              default: "true"
+              description: Run actions update using pinact
           banner: |
               >>>
               >>> Updating all dependencies
               >>>
           script: |
+            . "{{ BashHelperPath }}"
+
             {{ if eq .Flags.proxy false }}
             export GOPROXY=direct
             echo ">>>"
@@ -36,6 +42,16 @@ commands:
 
             echo ">>> Running go mod tidy"
             go mod tidy
+
+            {{ if .Flags.actions }}
+            ab_say Updating actions
+            pinact run \
+              --update \
+              --exclude choria-io/actions/packager \
+              --exclude choria-io/actions/lint_and_test/go \
+              --exclude choria-io/actions/nightly \
+              --exclude jakejarvis/s3-sync-action
+            {{ end }}
 
     - name: test
       type: parent
@@ -63,6 +79,55 @@ commands:
             {{ end }}
 
             ginkgo -r --skip Integration {{ .Arguments.dir | escape }}
+
+        - name: lint
+          type: exec
+          dir: "{{ AppDir }}"
+          flags:
+            - name: vet
+              description: Perform go vet
+              bool: true
+              default: true
+            - name: staticcheck
+              description: Perform staticcheck
+              bool: true
+              default: true
+            - name: update
+              description: Updates lint dependencies
+              bool: true
+          script: |
+            set -e
+
+            . "{{ BashHelperPath }}"
+
+            {{ if .Flags.update }}
+              ab_say Updating linting tools
+              go install github.com/client9/misspell/cmd/misspell@latest
+              go install honnef.co/go/tools/cmd/staticcheck@latest
+            {{ else }}
+              echo ">>> Run with --update to install required commands"
+              echo
+            {{ end }}
+
+            ab_say Formatting source files
+            go fmt ./...
+
+            ab_say Tidying go mod
+            go mod tidy
+
+            ab_say Checking spelling
+            find . -type f -name "*.go" | xargs misspell -error -locale US -i flavour
+            find docs/content -type f -name "*.md" | xargs misspell -error -locale US
+
+            {{ if .Flags.vet }}
+            ab_say Performing go vet
+            go vet ./...
+            {{ end }}
+
+            {{ if .Flags.staticcheck }}
+            ab_say Running staticcheck
+            staticcheck ./...
+            {{ end }}
 
     - name: docs
       type: parent

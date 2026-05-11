@@ -11,6 +11,14 @@ foss:
       os: linux
       arch: amd64
 
+    aarch64_linux:
+      os: linux
+      arch: arm64
+
+    ppc64le_linux:
+      os: linux
+      arch: ppc64le
+
   packages:
     defaults:
       name: stream-replicator
@@ -18,20 +26,20 @@ foss:
       etcdir: /etc/stream-replicator
       release: 1
 
-    el7_64:
-      dist: el7
-      template: el/el7
+    el_64:
+      dist: el
+      template: el/generic
       target_arch: x86_64
       binary: 64bit_linux
 
-    el8_64:
-      dist: el8
-      template: el/el8
-      target_arch: x86_64
-      binary: 64bit_linux
-    
-    el9_64:
-      dist: el9
-      template: el/el9
-      target_arch: x86_64
-      binary: 64bit_linux
+    el_ppc64le:
+      template: el/generic
+      dist: el
+      target_arch: ppc64le
+      binary: ppc64le_linux
+
+    el_aarch64:
+      template: el/generic
+      dist: el
+      target_arch: aarch64
+      binary: aarch64_linux
