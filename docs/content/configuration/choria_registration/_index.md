@@ -5,7 +5,7 @@ weight = 50
 pre = "<b>2.5. </b>"
 +++
 
-We'll show a full end to end walkthrough of building a centralised node metadata store for all your fleet nodes in multiple locations, including advisories about their availability.
+We'll show a full end to end walkthrough of building a centralized node metadata store for all your fleet nodes in multiple locations, including advisories about their availability.
 
 While the central store will get data for any single node hourly it will also get advisories letting it know when a node has not been seen for 11 minutes and when a node has not been seen for a hour allowing an up to date node view to be maintained. The in-datacenter data stores will have data no older than 5 minutes.
 
