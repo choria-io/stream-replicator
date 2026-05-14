@@ -81,13 +81,15 @@ func (c *targetInitiatedCopier) getLastConsumerSeq() uint64 {
 	return c.lastCSeq
 }
 
-func (c *targetInitiatedCopier) cleanupOnLeadershipLoss() {
+func (c *targetInitiatedCopier) resetSubscription() {
 	c.source.mu.Lock()
 
 	oldSub := c.source.sub
+	oldConsumer := c.source.consumer
 	oldMsgs := c.msgs
 
 	c.source.sub = nil
+	c.source.consumer = nil
 
 	// always rotate away from the old message channel so this instance
 	// does not keep consuming buffered stale messages
@@ -105,6 +107,16 @@ func (c *targetInitiatedCopier) cleanupOnLeadershipLoss() {
 		}
 	} else {
 		c.log.Infof("Nothing to unsubscribe after leadership loss")
+	}
+
+	if oldConsumer != nil {
+		if err := oldConsumer.Delete(); err != nil {
+			c.log.Warnf("Could not delete consumer after leadership loss: %v", err)
+		} else {
+			c.log.Infof("Deleted consumer successfully after leadership loss")
+		}
+	} else {
+		c.log.Infof("No consumer to delete after leadership loss")
 	}
 
 	// drain any already-buffered stale messages from oldMsgs
@@ -147,7 +159,7 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 		select {
 		case <-c.s.leadershipLost:
 			c.log.Warnf("Lost leadership, unsubscribing target-initiated subscription")
-			c.cleanupOnLeadershipLoss()
+			c.resetSubscription()
 
 		case <-c.s.leadershipWon:
 			c.log.Infof("Regained leadership, checking source consumer immediately")
@@ -172,7 +184,7 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 				continue
 			}
 
-			c.cleanupOnLeadershipLoss()
+			c.resetSubscription()
 
 			_, err := c.recreateEphemeral()
 			if err != nil {
