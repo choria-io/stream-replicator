@@ -39,6 +39,8 @@ type targetInitiatedCopier struct {
 	log      *logrus.Entry
 }
 
+const msgsChanBuffer = 10000
+
 func newTargetInitiatedCopier(s *Stream, log *logrus.Entry) *targetInitiatedCopier {
 	return &targetInitiatedCopier{
 		mu:     sync.Mutex{},
@@ -49,7 +51,7 @@ func newTargetInitiatedCopier(s *Stream, log *logrus.Entry) *targetInitiatedCopi
 		sr:     s.sr,
 		log:    log.WithField("copier", "target_initiated"),
 		health: time.NewTicker(time.Millisecond),
-		msgs:   make(chan *nats.Msg, 10000),
+		msgs:   make(chan *nats.Msg, msgsChanBuffer),
 		reset:  make(chan uint64, 1),
 	}
 }
@@ -79,6 +81,73 @@ func (c *targetInitiatedCopier) getLastConsumerSeq() uint64 {
 	return c.lastCSeq
 }
 
+func (c *targetInitiatedCopier) resetSubscription() {
+	c.source.mu.Lock()
+
+	oldSub := c.source.sub
+	oldConsumer := c.source.consumer
+	oldMsgs := c.msgs
+
+	c.source.sub = nil
+	c.source.consumer = nil
+
+	// always rotate away from the old message channel so this instance
+	// does not keep consuming buffered stale messages
+	c.msgs = make(chan *nats.Msg, msgsChanBuffer)
+
+	// call Unlock instead of defer c.source.mu.Unlock()
+	// so we are not holding c.source.mu for the entire duration of the drain loop
+	c.source.mu.Unlock()
+
+	if oldSub != nil && oldSub.IsValid() {
+		if err := oldSub.Unsubscribe(); err != nil {
+			c.log.Warnf("Could not unsubscribe from last inbox after leadership loss: %v", err)
+		} else {
+			c.log.Infof("Unsubscribed successfully after leadership loss")
+		}
+	} else {
+		c.log.Infof("Nothing to unsubscribe after leadership loss")
+	}
+
+	if oldConsumer != nil {
+		if err := oldConsumer.Delete(); err != nil {
+			c.log.Warnf("Could not delete consumer after leadership loss: %v", err)
+		} else {
+			c.log.Infof("Deleted consumer successfully after leadership loss")
+		}
+	} else {
+		c.log.Infof("No consumer to delete after leadership loss")
+	}
+
+	// drain any already-buffered stale messages from oldMsgs
+	// do not close oldMsgs as the existing NATS subscription may still be writing into if Unsubscribe() failed
+	for {
+		select {
+		case <-oldMsgs:
+		default:
+			return
+		}
+	}
+}
+
+func (c *targetInitiatedCopier) runHealthCheck() {
+	if c.s.isPaused() {
+		c.health.Reset(c.s.hcInterval)
+		return
+	}
+
+	c.log.Debugf("Performing health checks")
+	repaired, err := c.healthCheckSource()
+	if err != nil {
+		c.log.Errorf("Health check failed: %v", err)
+	}
+	if repaired {
+		consumerRepairCount.WithLabelValues(c.source.stream.Name(), c.sr.ReplicatorName, c.cfg.Name).Inc()
+		c.setLastConsumerSeq(0)
+	}
+	c.health.Reset(c.s.hcInterval)
+}
+
 func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 	if c.cfg.FilterSubject == "" {
 		return fmt.Errorf("a filter subject is required")
@@ -88,6 +157,13 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 
 	for {
 		select {
+		case <-c.s.leadershipLost:
+			c.log.Warnf("Lost leadership, unsubscribing target-initiated subscription")
+			c.resetSubscription()
+
+		case <-c.s.leadershipWon:
+			c.log.Infof("Regained leadership, checking source consumer immediately")
+			c.runHealthCheck()
 		case msg := <-c.msgs:
 			if c.s.isPaused() {
 				continue
@@ -108,18 +184,9 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 				continue
 			}
 
-			c.source.mu.Lock()
-			err := c.source.sub.Unsubscribe()
-			if err != nil {
-				c.log.Warnf("Could not unsubscribe from last inbox: %v", err)
-			}
+			c.resetSubscription()
 
-			// drop all in flight messages
-			close(c.msgs)
-			c.msgs = make(chan *nats.Msg, 100000)
-			c.source.mu.Unlock()
-
-			_, err = c.recreateEphemeral()
+			_, err := c.recreateEphemeral()
 			if err != nil {
 				c.log.Errorf("Recreating consumer after reset failed: %v", err)
 				continue
@@ -130,22 +197,7 @@ func (c *targetInitiatedCopier) copyMessages(ctx context.Context) error {
 			c.health.Reset(c.s.hcInterval)
 
 		case <-c.health.C:
-			if c.s.isPaused() {
-				c.health.Reset(c.s.hcInterval)
-				continue
-			}
-
-			c.log.Debugf("Performing health checks")
-			repaired, err := c.healthCheckSource()
-			if err != nil {
-				c.log.Errorf("Health check failed: %v", err)
-			}
-			if repaired {
-				consumerRepairCount.WithLabelValues(c.source.stream.Name(), c.sr.ReplicatorName, c.cfg.Name).Inc()
-				c.setLastConsumerSeq(0)
-			}
-
-			c.health.Reset(c.s.hcInterval)
+			c.runHealthCheck()
 
 		case <-ctx.Done():
 			c.health.Stop()
@@ -368,6 +420,7 @@ func (c *targetInitiatedCopier) recreateEphemeraLocked() (bool, error) {
 		jsm.DeliverySubject(c.source.sub.Subject),
 		jsm.PushFlowControl(),
 		jsm.IdleHeartbeat(20 * time.Second),
+		jsm.InactiveThreshold(5 * time.Minute),
 	}
 
 	if c.cfg.FilterSubject != "" {
